@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import Simulator from "./modes/sim/Simulator";
+import { Learn } from "./modes/learn/Learn";
+import { Progress } from "./modes/progress/Progress";
+import { getStats } from "./lib/progress";
 
 const TABS = [
   { id: "learn", label: "Learn", icon: "📚" },
@@ -8,16 +11,8 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-const MODULES = [
-  { key: "fundamentals", n: 1, title: "Tournament Fundamentals", blurb: "Stages, stack in bb, M-ratio, and why chips ≠ money." },
-  { key: "pushfold", n: 2, title: "Short-Stack Push/Fold", blurb: "Sub-20bb shove/fold with Nash ranges and fold equity." },
-  { key: "icm", n: 3, title: "ICM & Final Table", blurb: "Pay jumps, ICM pressure, laddering and deals." },
-  { key: "bubble", n: 4, title: "The Bubble", blurb: "Bully the scared, survive short, satellite bubbles." },
-  { key: "deepstack", n: 5, title: "Deep-Stack Postflop", blurb: "50bb+ play: 3-bet pots, texture, sizing, pot control." },
-];
-
 function useHashTab(): TabId {
-  const read = () => (location.hash.replace(/^#\/?/, "").split("/")[0] || "learn");
+  const read = () => location.hash.replace(/^#\/?/, "").split("/")[0] || "learn";
   const [raw, setRaw] = useState<string>(read());
   useEffect(() => {
     const on = () => setRaw(read());
@@ -29,13 +24,15 @@ function useHashTab(): TabId {
 
 export default function App() {
   const tab = useHashTab();
+  const [, setStatsTick] = useState(0);
+  const notify = () => setStatsTick((x) => x + 1);
   return (
     <div className="min-h-full flex flex-col max-w-xl mx-auto">
       <Header />
       <main className="flex-1 px-4 pb-28 pt-4">
-        {tab === "learn" && <Learn />}
+        {tab === "learn" && <Learn notify={notify} />}
         {tab === "sim" && <Simulator />}
-        {tab === "progress" && <Progress />}
+        {tab === "progress" && <Progress notify={notify} />}
       </main>
       <TabBar tab={tab} />
     </div>
@@ -43,6 +40,7 @@ export default function App() {
 }
 
 function Header() {
+  const s = getStats();
   return (
     <header className="px-4 pt-5 pb-3 border-b border-line flex items-center justify-between">
       <div>
@@ -51,56 +49,15 @@ function Header() {
         </div>
         <div className="eyebrow mt-0.5">Tournament poker trainer</div>
       </div>
-      <span className="chip bg-surface2 text-muted border border-line">v0.1</span>
+      <a
+        href="#/progress"
+        className="focusable chip bg-surface2 border border-line font-mono text-xs flex items-center gap-2 px-2.5 py-1.5"
+      >
+        <span className="text-gold">{s.streak}🔥</span>
+        <span className="text-teal">Lv{s.level}</span>
+        <span className="text-muted">{s.xp}xp</span>
+      </a>
     </header>
-  );
-}
-
-function Learn() {
-  return (
-    <section>
-      <p className="eyebrow">Curriculum · 5 modules</p>
-      <h1 className="text-2xl font-bold mt-1 mb-4">Learn tournament poker</h1>
-      <div className="flex flex-col gap-3">
-        {MODULES.map((m) => (
-          <div key={m.key} className="card p-4 flex items-start gap-3">
-            <div className="w-9 h-9 shrink-0 rounded-lg bg-surface2 border border-line grid place-items-center font-mono font-bold text-teal">
-              {m.n}
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold">{m.title}</div>
-              <div className="text-sm text-muted mt-0.5">{m.blurb}</div>
-            </div>
-            <span className="chip bg-surface2 text-muted border border-line ml-auto self-center">soon</span>
-          </div>
-        ))}
-      </div>
-      <p className="text-xs text-muted mt-4">
-        Lessons are being authored (ICM, GTO/Nash push-fold, standard MTT theory) and will land here with quizzes.
-      </p>
-    </section>
-  );
-}
-
-function Progress() {
-  return (
-    <section>
-      <p className="eyebrow">Your game</p>
-      <h1 className="text-2xl font-bold mt-1 mb-4">Progress</h1>
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { k: "Level", v: "1" },
-          { k: "XP", v: "0" },
-          { k: "Best run", v: "—" },
-        ].map((s) => (
-          <div key={s.k} className="card p-3 text-center">
-            <div className="eyebrow">{s.k}</div>
-            <div className="text-xl font-bold mt-1 font-mono">{s.v}</div>
-          </div>
-        ))}
-      </div>
-      <p className="text-xs text-muted mt-4">Stats, streaks and completed modules will track here.</p>
-    </section>
   );
 }
 

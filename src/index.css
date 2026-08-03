@@ -33,6 +33,9 @@ body {
   .btn-ghost {
     @apply btn border border-line text-ink hover:bg-surface2;
   }
+  .btn-choice {
+    @apply btn border border-line bg-surface text-ink hover:bg-surface2;
+  }
   .chip {
     @apply inline-block rounded-md px-2 py-0.5 text-xs font-semibold font-mono;
   }
