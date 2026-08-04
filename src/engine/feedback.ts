@@ -1,8 +1,30 @@
 import type { TournamentState } from "./tournament";
-import type { Action } from "./hand";
+import type { Action, HandState } from "./hand";
 import { legalActions, potSize } from "./hand";
 import { chenScore, handKey } from "./ranges";
 import { score7, categoryOf } from "./handEval";
+import { inShoveRange } from "./pushfold";
+
+// Map the hero's seat to a Nash position label (UTG/MP/CO/BTN/SB) for range lookup.
+function heroPosition(h: HandState, heroSeat: number): string {
+  const n = h.seats.length;
+  const dealt = (i: number) => h.seats[i].hole.length === 2 || i === heroSeat;
+  const nActive = h.seats.filter((_, i) => dealt(i)).length;
+  if (nActive <= 2) return "SB"; // heads-up: button/SB jams widest
+  if (heroSeat === h.button) return "BTN";
+  let p = 0;
+  for (let k = 1; k <= n; k++) {
+    const i = (h.button + k) % n;
+    if (!dealt(i)) continue;
+    p++;
+    if (i === heroSeat) break;
+  }
+  if (p <= 2) return "SB"; // SB, or BB fallback (BB is not a first-in open spot)
+  const stealDist = nActive - p; // 1 = CO, 2 = HJ, ...
+  if (stealDist === 1) return "CO";
+  if (stealDist <= 3) return "MP";
+  return "UTG";
+}
 
 export type Rec = {
   bucket: "fold" | "check" | "call" | "raise";
@@ -48,10 +70,11 @@ export function recommend(t: TournamentState): Rec | null {
     if (stackBB <= 15) {
       const regime = "Short-stack push/fold";
       if (!facingRaise) {
-        const thr = (stackBB <= 8 ? 6 : stackBB <= 12 ? 7 : 8) + icm.tighten;
-        return chen >= thr
-          ? { bucket: "raise", allIn: true, regime, reason: `${stackBB.toFixed(0)}bb with ${key}: a standard open-shove — take the fold equity.`, icmNote }
-          : { bucket: "fold", regime, reason: `${key} is below the open-jam threshold at ${stackBB.toFixed(0)}bb.`, icmNote };
+        const pos = heroPosition(h, t.heroSeat);
+        const sr = inShoveRange(key, stackBB, pos);
+        return sr.inRange
+          ? { bucket: "raise", allIn: true, regime, reason: `${stackBB.toFixed(0)}bb ${pos}: ${key} is in the Nash open-jam range (~${sr.percent}% of hands).`, icmNote }
+          : { bucket: "fold", regime, reason: `${key} is outside the ${pos} Nash open-jam range at ${stackBB.toFixed(0)}bb (~${sr.percent}% jam).`, icmNote };
       }
       return chen >= 11 + icm.tighten
         ? { bucket: "call", regime, reason: `${key} is strong enough to call off ${stackBB.toFixed(0)}bb.`, icmNote }

@@ -4,6 +4,7 @@ import { score7, categoryOf } from "./handEval";
 import { icmEquity, icmPressure } from "./icm";
 import type { Seat, Action } from "./hand";
 import { startHand, legalActions, applyAction, computePots } from "./hand";
+import { inShoveRange } from "./pushfold";
 
 let pass = 0;
 let fail = 0;
@@ -108,6 +109,15 @@ function playRandomHand(): boolean {
 let conserved = 0;
 for (let i = 0; i < 300; i++) if (playRandomHand()) conserved++;
 ok(conserved === 300, `chip conservation held in all 300 random hands (got ${conserved}/300)`);
+
+// --- push/fold Nash range membership (parser) ---
+ok(inShoveRange("A2s", 10, "BTN").inRange, "10bb BTN jams A2s");
+ok(!inShoveRange("72o", 10, "UTG").inRange, "10bb UTG does not jam 72o");
+ok(inShoveRange("22", 8, "UTG").inRange, "8bb UTG jams 22");
+ok(inShoveRange("ATo", 10, "UTG").inRange, "10bb UTG jams ATo");
+ok(!inShoveRange("A5o", 10, "UTG").inRange, "10bb UTG folds A5o (ATo+ only)");
+ok(inShoveRange("54s", 8, "SB").inRange, "8bb SB jams 54s");
+ok(inShoveRange("AA", 15, "UTG").inRange, "15bb UTG jams AA");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

@@ -878,7 +878,7 @@ In a satellite, 1st place and last-seat place pay identically. Once payouts are 
 | ~50% (true coin-flip stack) | Near chip-EV, slightly tight |
 | ~75% | ~KK+ only |
 | ~90% | Fold everything, including AA |
-| Locked (stack > T/S) | Fold literally 100% of hands |
+| Locked (stack > T ÷ (S+1)) | Fold literally 100% of hands |
 
 - **Jamming** retains value only while you actually need chips: if blinds will drop your P(seat) below the pack before shorter stacks die, open-jam wide into players who cannot correctly call you (their calling ranges are collapsing too — often harder than yours). A 6bb stack with three 3bb stacks behind should still often fold; a 6bb stack that is the table's shortest must attack now.
 - Blind-vs-blind unopened pots you would auto-jam on a money bubble become folds the moment your seat probability is high. Walk math changes: surrendering 1.5bb per orbit is trivial when three players are on fumes.
@@ -892,7 +892,7 @@ In a satellite, 1st place and last-seat place pay identically. Once payouts are 
 - The reverse exploit exists too: with the covering stack, jam relentlessly into locked and near-locked players — they are correctly folding almost everything, so every hand you steal is nearly risk-free.
 
 @check 11 players remain for 10 identical seats with equal stacks. An opponent jams and you hold AA (about 85% equity). The correct play is? | Fold — folding keeps about 91% seat equity while calling offers only about 85% | Call — you should never fold aces preflop | Call — winning makes you chip leader with a guaranteed seat
-@check In a 10-seat satellite with 1,000,000 total chips, what stack mathematically guarantees a seat? | More than 100,000 chips | Exactly the average stack of the field | More than 90,909 chips
+@check In a 10-seat satellite with 1,000,000 total chips, what stack mathematically guarantees a seat? | More than 90,909 chips — total ÷ (seats + 1) | Exactly the average stack, 100,000 | More than 500,000 chips
 @check In a satellite, what is the value of chips above the amount needed to lock a seat? | Essentially zero — every seat pays the same | Full face value, as in any tournament | About half face value due to ICM
 
 # Deep-Stack MTT Postflop
