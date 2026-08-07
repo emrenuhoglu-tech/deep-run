@@ -3,6 +3,7 @@ import type { Action, HandState } from "./hand";
 import { legalActions, potSize } from "./hand";
 import { chenScore, handKey } from "./ranges";
 import { score7, categoryOf } from "./handEval";
+import { drawStrength } from "./draws";
 import { inShoveRange } from "./pushfold";
 import { positionOf, rfiAction, vsOpenAction, vsOpenCovered, callOffAction, restealAction } from "./preflop";
 import { icmPressure } from "./icm";
@@ -142,11 +143,14 @@ export function recommend(t: TournamentState): Rec | null {
   const strongPair =
     (holeR[0] === holeR[1] && holeR[0] > topBoard) || // overpair
     holeR.includes(topBoard); // top pair (paired the highest board card)
+  const draw = drawStrength(s.hole, h.board);
 
   if (!facingBet) {
-    return heroBeatsBoard && cat >= 1
-      ? { bucket: "raise", regime, reason: `You have ${CAT_WORDS[cat]} — bet for value/protection.`, icmNote }
-      : { bucket: "check", regime, reason: `Not much beyond the board yet — check.`, icmNote };
+    if (heroBeatsBoard && cat >= 1)
+      return { bucket: "raise", regime, reason: `You have ${CAT_WORDS[cat]} — bet for value/protection.`, icmNote };
+    if (draw.strong)
+      return { bucket: "raise", regime, reason: `${draw.label} (~${draw.outs} outs) — semi-bluff to build the pot and deny equity.`, icmNote };
+    return { bucket: "check", regime, reason: `Not much beyond the board yet — check.`, icmNote };
   }
   // Facing a bet. Two pair or better never folds to a single bet.
   if (heroBeatsBoard && cat >= 3)
@@ -164,7 +168,16 @@ export function recommend(t: TournamentState): Rec | null {
         }
       : { bucket: "fold", regime, reason: `Only a marginal pair facing a big bet — fold.`, icmNote };
   }
-  return { bucket: "fold", regime, reason: `Your hand doesn't beat the board — fold.`, icmNote };
+  // No made hand — but a strong draw has the equity to continue, and to raise vs a small bet.
+  if (draw.strong) {
+    if (la.call <= pot * 0.5)
+      return { bucket: "raise", regime, reason: `${draw.label} (~${draw.outs} outs) — raise as a semi-bluff versus a small bet.`, icmNote };
+    if (la.call <= pot)
+      return { bucket: "call", regime, reason: `${draw.label} (~${draw.outs} outs) — you have the odds to continue.`, icmNote };
+  }
+  if (draw.gutshot && la.call <= pot * 0.25)
+    return { bucket: "call", regime, reason: `Gutshot (~4 outs) — cheap enough to peel one card.`, icmNote };
+  return { bucket: "fold", regime, reason: `No pair and no real draw facing a bet — fold.`, icmNote };
 }
 
 export type Grade = { verdict: "good" | "ok" | "mistake"; regime: string; note: string };

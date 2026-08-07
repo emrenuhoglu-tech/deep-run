@@ -303,6 +303,12 @@ for (const c of CONCEPTS) {
   ok(gradeable === 25, `makeSpot("${c}") yields a gradeable spot every time (got ${gradeable}/25)`);
 }
 
+// --- TIER 6: postflop draw awareness ---
+ok(recommend(fbSpot({ hole: ["Ah", "Jh"], board: ["Kh", "Qs", "7h"], currentBet: 300 }))!.bucket !== "fold", "a nut flush draw does not fold to a pot-sized bet");
+ok(recommend(fbSpot({ hole: ["9h", "8s"], board: ["7c", "6d", "2h"], currentBet: 200 }))!.bucket !== "fold", "an open-ended straight draw continues facing a bet");
+ok(recommend(fbSpot({ hole: ["Ah", "Jh"], board: ["Kh", "Qs", "7h"], currentBet: 0 }))!.bucket === "raise", "a strong draw semi-bluffs when checked to");
+ok(recommend(fbSpot({ hole: ["3c", "2d"], board: ["Kh", "Qs", "7h"], currentBet: 300 }))!.bucket === "fold", "air with no draw still folds to a bet");
+
 // --- TIER 5: Monte-Carlo equity is directionally sane ---
 ok(equity([parseCard("As"), parseCard("Ad")], [], null, 1200) > 0.8, "AA has >80% equity vs a random hand");
 ok(equity([parseCard("Ah"), parseCard("Kh")], [], null, 1200) > 0.58, "AKs has >58% equity vs a random hand");
