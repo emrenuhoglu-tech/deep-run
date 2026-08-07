@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { chapterById, nextChapter } from "../../content/curriculum";
 import { LessonBody } from "../../components/LessonBody";
 import { completeChapter, addXp, isDone } from "../../lib/progress";
 import { play } from "../../lib/sound";
+import { speak, stop as stopSpeech, speechSupported } from "../../lib/speech";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -32,7 +33,22 @@ export function LessonPlayer({
   const [picked, setPicked] = useState<number | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
   const [awarded, setAwarded] = useState(0);
+  const [speaking, setSpeaking] = useState(false);
   const alreadyDone = m ? isDone(m.id) : false;
+
+  // Stop any narration when the lesson unmounts (back / navigate to next chapter).
+  useEffect(() => () => stopSpeech(), []);
+
+  function toggleNarration() {
+    if (speaking) {
+      stopSpeech();
+      setSpeaking(false);
+    } else if (m) {
+      setSpeaking(true);
+      play("tap");
+      speak(m.body, () => setSpeaking(false));
+    }
+  }
 
   const quiz = useMemo(
     () =>
@@ -82,6 +98,8 @@ export function LessonPlayer({
     } else grant(correctCount);
   }
   function startQuiz() {
+    stopSpeech();
+    setSpeaking(false);
     setQi(0);
     setPicked(null);
     setCorrectCount(0);
@@ -108,6 +126,17 @@ export function LessonPlayer({
       <div className="flex min-h-full flex-col">
         {header}
         <div className="flex-1 space-y-3 py-4 pb-28">
+          {speechSupported() && (
+            <div className="flex justify-end">
+              <button
+                onClick={toggleNarration}
+                aria-pressed={speaking}
+                className="focusable chip bg-surface2 border border-line px-3 py-1.5 text-teal"
+              >
+                {speaking ? "⏸ Stop narration" : "🔊 Read aloud"}
+              </button>
+            </div>
+          )}
           <LessonBody body={m.body} />
         </div>
         <div className="sticky bottom-16 bg-base/95 py-3 backdrop-blur">

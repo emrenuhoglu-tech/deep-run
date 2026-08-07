@@ -9,6 +9,7 @@ export function Learn({ notify }: { notify: () => void }) {
   if (openId) {
     return (
       <LessonPlayer
+        key={openId}
         chapterId={openId}
         onBack={() => setOpenId(null)}
         onOpen={(id) => setOpenId(id)}
