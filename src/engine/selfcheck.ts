@@ -7,6 +7,9 @@ import { startHand, legalActions, applyAction, computePots } from "./hand";
 import { inShoveRange } from "./pushfold";
 import { recommend, grade } from "./feedback";
 import type { TournamentState } from "./tournament";
+import { handsIn } from "./rangeNotation";
+import { positionOf } from "./preflop";
+import preflopCharts from "../content/preflop_charts.json";
 
 let pass = 0;
 let fail = 0;
@@ -193,6 +196,71 @@ const jamRec = recommend(fbPre(["Ad", "Kd"], 850))!;
 ok(jamRec.regime === "Short-stack push/fold", "ante-level unraised <=15bb reaches the push/fold branch (P1)");
 ok(jamRec.bucket === "raise" && jamRec.allIn === true, "AKs at ~9bb open-jams — the Nash trainer is alive again");
 ok(recommend(fbPre(["7d", "2c"], 850))!.bucket === "fold", "72o at ~9bb folds (outside any jam range)");
+
+// --- TIER 1: range-notation parser (spans / plus / singles) ---
+ok(handsIn("22+").has("AA") && handsIn("22+").has("22"), "22+ spans 22 through AA");
+ok(handsIn("66-99").size === 4 && handsIn("66-99").has("77"), "pair span 66-99 → 66,77,88,99");
+ok(handsIn("A5s+").has("AKs") && handsIn("A5s+").has("A5s") && !handsIn("A5s+").has("A4s"), "A5s+ climbs to AKs, excludes A4s");
+ok(handsIn("A5s-A4s").has("A4s") && handsIn("A5s-A4s").has("A5s") && handsIn("A5s-A4s").size === 2, "suited span A5s-A4s");
+ok(handsIn("AQo-ATo").has("AJo") && handsIn("AQo-ATo").size === 3, "offsuit span AQo-ATo → ATo,AJo,AQo");
+ok(handsIn("K9s-K2s").has("K5s") && handsIn("K9s-K2s").size === 8, "suited span K9s-K2s → 8 combos");
+
+// --- TIER 1 (PF-8): every embedded preflop range parses to a non-empty set (guards hand-authored JSON rot) ---
+{
+  const c = preflopCharts as {
+    rfi: Record<string, Record<string, string>>;
+    vs_open: Record<string, Record<string, { "3bet"?: string; call?: string }>>;
+    bb_defense: Record<string, Record<string, { "3bet"?: string; call?: string }>>;
+  };
+  let bad = 0;
+  const check = (r?: string) => { if (!r || handsIn(r).size === 0) bad++; };
+  for (const d of Object.values(c.rfi)) for (const r of Object.values(d)) check(r);
+  for (const grp of [c.vs_open, c.bb_defense]) for (const d of Object.values(grp)) for (const resp of Object.values(d)) { check(resp["3bet"]); check(resp.call); }
+  ok(bad === 0, `all preflop ranges parse to a non-empty set (got ${bad} bad)`);
+}
+
+// --- TIER 1: position labels (8-max, button on seat 0) ---
+function preSpot(o: {
+  heroSeat: number; hole: [string, string]; stackBB: number; aggressor?: number; raiseTo?: number;
+}): TournamentState {
+  const bb = 100;
+  const N = 8;
+  const seats: Seat[] = [];
+  for (let i = 0; i < N; i++)
+    seats.push({
+      id: i, name: i === o.heroSeat ? "You" : "P" + i, isHero: i === o.heroSeat,
+      stack: i === o.heroSeat ? Math.round(o.stackBB * bb) : 100000,
+      hole: [parseCard("2c"), parseCard("2d")], folded: false, allIn: false,
+      committed: 0, totalCommitted: 0, hasActed: false,
+    });
+  seats[o.heroSeat].hole = o.hole.map(parseCard);
+  const raised = o.aggressor != null && o.aggressor >= 0;
+  const currentBet = raised ? (o.raiseTo ?? 250) : bb;
+  if (raised) seats[o.aggressor!].committed = currentBet;
+  const hand: HandState = {
+    seats, button: 0, board: [], deck: [], street: "preflop", toAct: o.heroSeat,
+    currentBet, minRaise: bb, lastAggressor: raised ? o.aggressor! : -1, bb,
+  };
+  return { hand, heroSeat: o.heroSeat, fieldRemaining: 100, paidPlaces: 15, tableSize: N } as unknown as TournamentState;
+}
+{
+  const h8 = preSpot({ heroSeat: 0, hole: ["Ah", "Kd"], stackBB: 100 }).hand!;
+  ok(positionOf(h8, 0) === "BTN" && positionOf(h8, 2) === "BB" && positionOf(h8, 3) === "UTG" && positionOf(h8, 7) === "CO",
+    "positionOf maps seats (button=0): 0→BTN, 2→BB, 3→UTG, 7→CO");
+}
+
+// --- TIER 1: the six adversarially-confirmed misadvice spots are now graded correctly ---
+ok(recommend(preSpot({ heroSeat: 0, hole: ["6c", "6d"], stackBB: 45 }))!.bucket === "raise", "66 opens on the BTN at 45bb (was: fold)");
+ok(recommend(preSpot({ heroSeat: 0, hole: ["Ah", "Td"], stackBB: 60 }))!.bucket === "raise", "ATo opens on the BTN at 60bb (was: fold)");
+ok(recommend(preSpot({ heroSeat: 3, hole: ["Qh", "9h"], stackBB: 100 }))!.bucket === "fold", "Q9s folds from UTG at 100bb (was: raise)");
+ok(recommend(preSpot({ heroSeat: 7, hole: ["Ah", "Kd"], stackBB: 100, aggressor: 3, raiseTo: 250 }))!.bucket === "raise", "AKo 3-bets vs a UTG open (was: call)");
+{
+  const t9 = preSpot({ heroSeat: 2, hole: ["Tc", "9c"], stackBB: 40, aggressor: 0, raiseTo: 200 });
+  const r = recommend(t9)!;
+  ok(r.bucket !== "fold", "T9s does not fold in the BB vs a BTN open (was: fold + punished)");
+  ok(grade(r, { type: "call" }).verdict !== "mistake", "defending T9s in the BB is not graded a mistake");
+}
+ok(recommend(preSpot({ heroSeat: 3, hole: ["8c", "8d"], stackBB: 30 }))!.bucket === "raise", "88 opens from UTG at 30bb (unraised)");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

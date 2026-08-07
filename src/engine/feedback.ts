@@ -4,6 +4,7 @@ import { legalActions, potSize } from "./hand";
 import { chenScore, handKey } from "./ranges";
 import { score7, categoryOf } from "./handEval";
 import { inShoveRange } from "./pushfold";
+import { positionOf, rfiAction, vsOpenAction, vsOpenCovered } from "./preflop";
 
 // Map the hero's seat to a Nash position label (UTG/MP/CO/BTN/SB) for range lookup.
 function heroPosition(h: HandState, heroSeat: number): string {
@@ -85,11 +86,21 @@ export function recommend(t: TournamentState): Rec | null {
         : { bucket: "fold", regime, reason: `${key} isn't enough to call a jam for ${stackBB.toFixed(0)}bb.`, icmNote };
     }
     const regime = "Preflop";
+    const heroPos = positionOf(h, t.heroSeat);
     if (!facingRaise) {
-      return chen >= 7
-        ? { bucket: "raise", regime, reason: `${key}: open with a raise and take the initiative.`, icmNote }
-        : { bucket: la.check ? "check" : "fold", regime, reason: `${key} is too weak to open — ${la.check ? "check" : "fold"}.`, icmNote };
+      return rfiAction(key, heroPos, stackBB) === "raise"
+        ? { bucket: "raise", regime, reason: `${key}: a standard ${heroPos} open — raise and take the initiative.`, icmNote }
+        : { bucket: la.check ? "check" : "fold", regime, reason: `${key} is outside the ${heroPos} opening range — ${la.check ? "check" : "fold"}.`, icmNote };
     }
+    // Facing a single raise: use documented response ranges where the charts cover the spot.
+    const openerPos = h.lastAggressor >= 0 ? positionOf(h, h.lastAggressor) : "UTG";
+    if (vsOpenCovered(heroPos, openerPos)) {
+      const act = vsOpenAction(key, openerPos, heroPos === "BB", stackBB);
+      if (act === "raise") return { bucket: "raise", regime, reason: `${key} vs a ${openerPos} open: 3-bet for value.`, icmNote };
+      if (act === "call") return { bucket: "call", regime, reason: `${key} vs a ${openerPos} open: call at this price${heroPos === "BB" ? " — the big blind defends wide" : ""}.`, icmNote };
+      return { bucket: "fold", regime, reason: `${key} folds to a ${openerPos} open from ${heroPos}.`, icmNote };
+    }
+    // Uncovered spot (blind-vs-blind, vs a late open out of position): Chen fallback.
     if (chen >= 13) return { bucket: "raise", regime, reason: `${key} plays as a value 3-bet.`, icmNote };
     if (chen >= 9 && la.call <= s.stack * 0.12) return { bucket: "call", regime, reason: `${key} is a fine call at this price.`, icmNote };
     return { bucket: "fold", regime, reason: `${key} is a fold facing a raise.`, icmNote };
