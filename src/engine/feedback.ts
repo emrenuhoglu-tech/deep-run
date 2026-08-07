@@ -4,7 +4,8 @@ import { legalActions, potSize } from "./hand";
 import { chenScore, handKey } from "./ranges";
 import { score7, categoryOf } from "./handEval";
 import { inShoveRange } from "./pushfold";
-import { positionOf, rfiAction, vsOpenAction, vsOpenCovered } from "./preflop";
+import { positionOf, rfiAction, vsOpenAction, vsOpenCovered, callOffAction, restealAction } from "./preflop";
+import { icmPressure } from "./icm";
 
 // Map the hero's seat to a Nash position label (UTG/MP/CO/BTN/SB) for range lookup.
 function heroPosition(h: HandState, heroSeat: number): string {
@@ -45,7 +46,19 @@ function icmContext(t: TournamentState) {
     t.fieldRemaining > t.paidPlaces &&
     t.fieldRemaining <= t.paidPlaces + Math.max(2, Math.round(t.paidPlaces * 0.12));
   const pressure = finalTable || bubbleZone;
-  return { finalTable, bubbleZone, pressure, tighten: pressure ? 2 : 0 };
+
+  // At the final table the field is small enough for exact ICM — feed real stacks + the
+  // payout ladder through icmPressure so the survival premium actually drives the decision.
+  let dollars = 0;
+  if (finalTable && t.seats && t.payouts) {
+    const alive = t.seats.map((s, i) => ({ s, i })).filter((x) => x.s.stack > 0);
+    const heroPos = alive.findIndex((x) => x.i === t.heroSeat);
+    if (heroPos >= 0 && alive.length >= 2 && alive.length <= 10) {
+      dollars = icmPressure(alive.map((x) => x.s.stack), t.payouts, heroPos);
+    }
+  }
+  // tighten shifts call-off ranges one stack-band narrower when there's a survival premium.
+  return { finalTable, bubbleZone, pressure, tighten: pressure ? 1 : 0, dollars };
 }
 
 // The "textbook" line at the hero's current decision (heuristic, ICM-aware).
@@ -65,25 +78,37 @@ export function recommend(t: TournamentState): Rec | null {
   // Nash-jam branches for most of the tournament.
   const facingRaise = h.street === "preflop" && h.lastAggressor !== -1;
   const icm = icmContext(t);
+  const premium = icm.dollars < 0 ? ` (~$${Math.abs(Math.round(icm.dollars))} of your equity is survival premium)` : "";
   const icmNote = !icm.pressure
     ? undefined
     : icm.finalTable
-      ? "Final table: ICM adds a survival premium — lean tighter with marginal hands, apply pressure when you cover people."
+      ? `Final table: ICM adds a survival premium${premium} — lean tighter with marginal hands, apply pressure when you cover people.`
       : "Money bubble: survival premium is high — fold marginal spots, attack stacks that can't call.";
 
   if (h.street === "preflop") {
     if (stackBB <= 15) {
       const regime = "Short-stack push/fold";
+      const pos = heroPosition(h, t.heroSeat);
       if (!facingRaise) {
-        const pos = heroPosition(h, t.heroSeat);
         const sr = inShoveRange(key, stackBB, pos);
-        return sr.inRange
-          ? { bucket: "raise", allIn: true, regime, reason: `${stackBB.toFixed(0)}bb ${pos}: ${key} is in the Nash open-jam range (~${sr.percent}% of hands).`, icmNote }
-          : { bucket: "fold", regime, reason: `${key} is outside the ${pos} Nash open-jam range at ${stackBB.toFixed(0)}bb (~${sr.percent}% jam).`, icmNote };
+        // At <=5bb on the button/SB there's no folding — jam any two.
+        const jamAny = stackBB <= 5 && (pos === "BTN" || pos === "SB");
+        return sr.inRange || jamAny
+          ? { bucket: "raise", allIn: true, regime, reason: `${stackBB.toFixed(0)}bb ${pos}: ${key} open-jams${jamAny && !sr.inRange ? " (≤5bb — jam any two)" : ` (Nash ~${sr.percent}%)`}.`, icmNote }
+          : { bucket: "fold", regime, reason: `${key} is outside the ${pos} open-jam range at ${stackBB.toFixed(0)}bb (~${sr.percent}%).`, icmNote };
       }
-      return chen >= 11 + icm.tighten
-        ? { bucket: "call", regime, reason: `${key} is strong enough to call off ${stackBB.toFixed(0)}bb.`, icmNote }
-        : { bucket: "fold", regime, reason: `${key} isn't enough to call a jam for ${stackBB.toFixed(0)}bb.`, icmNote };
+      // Facing a raise short: call off a jam, or resteal (3-bet jam) over a live open.
+      const aggr = h.lastAggressor;
+      const openerPos = aggr >= 0 ? positionOf(h, aggr) : "UTG";
+      if (aggr >= 0 && h.seats[aggr].allIn) {
+        const act = callOffAction(key, openerPos, stackBB, icm.tighten);
+        return act === "call"
+          ? { bucket: "call", regime, reason: `${key} calls the ${openerPos} jam at ${stackBB.toFixed(0)}bb${icm.tighten ? " (ICM-tightened)" : ""}.`, icmNote }
+          : { bucket: "fold", regime, reason: `${key} can't profitably call the ${openerPos} jam${icm.tighten ? " — ICM survival premium" : ""}.`, icmNote };
+      }
+      return restealAction(key, openerPos, stackBB) === "raise"
+        ? { bucket: "raise", allIn: true, regime, reason: `${key}: 3-bet jam (resteal) over the ${openerPos} open.`, icmNote }
+        : { bucket: "fold", regime, reason: `${key} folds to the ${openerPos} open at ${stackBB.toFixed(0)}bb.`, icmNote };
     }
     const regime = "Preflop";
     const heroPos = positionOf(h, t.heroSeat);

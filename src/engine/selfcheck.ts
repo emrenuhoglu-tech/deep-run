@@ -221,27 +221,37 @@ ok(handsIn("K9s-K2s").has("K5s") && handsIn("K9s-K2s").size === 8, "suited span 
 
 // --- TIER 1: position labels (8-max, button on seat 0) ---
 function preSpot(o: {
-  heroSeat: number; hole: [string, string]; stackBB: number; aggressor?: number; raiseTo?: number;
+  heroSeat: number; hole: [string, string]; stackBB: number;
+  aggressor?: number; raiseTo?: number; jam?: boolean; finalTable?: boolean;
 }): TournamentState {
   const bb = 100;
   const N = 8;
+  const heroChips = Math.round(o.stackBB * bb);
   const seats: Seat[] = [];
   for (let i = 0; i < N; i++)
     seats.push({
       id: i, name: i === o.heroSeat ? "You" : "P" + i, isHero: i === o.heroSeat,
-      stack: i === o.heroSeat ? Math.round(o.stackBB * bb) : 100000,
+      stack: i === o.heroSeat ? heroChips : 100000,
       hole: [parseCard("2c"), parseCard("2d")], folded: false, allIn: false,
       committed: 0, totalCommitted: 0, hasActed: false,
     });
   seats[o.heroSeat].hole = o.hole.map(parseCard);
   const raised = o.aggressor != null && o.aggressor >= 0;
-  const currentBet = raised ? (o.raiseTo ?? 250) : bb;
-  if (raised) seats[o.aggressor!].committed = currentBet;
+  const currentBet = raised ? (o.jam ? heroChips : o.raiseTo ?? 250) : bb;
+  if (raised) {
+    seats[o.aggressor!].committed = currentBet;
+    if (o.jam) { seats[o.aggressor!].allIn = true; seats[o.aggressor!].stack = 0; }
+  }
   const hand: HandState = {
     seats, button: 0, board: [], deck: [], street: "preflop", toAct: o.heroSeat,
     currentBet, minRaise: bb, lastAggressor: raised ? o.aggressor! : -1, bb,
   };
-  return { hand, heroSeat: o.heroSeat, fieldRemaining: 100, paidPlaces: 15, tableSize: N } as unknown as TournamentState;
+  const tSeats = seats.map((s) => ({ name: s.name, stack: s.isHero ? heroChips : 100000, isHero: s.isHero }));
+  const payouts = [1000, 600, 400, 300, 200, 150, 100, 80];
+  return {
+    hand, heroSeat: o.heroSeat, fieldRemaining: o.finalTable ? 6 : 100, paidPlaces: 15, tableSize: N,
+    seats: tSeats, payouts,
+  } as unknown as TournamentState;
 }
 {
   const h8 = preSpot({ heroSeat: 0, hole: ["Ah", "Kd"], stackBB: 100 }).hand!;
@@ -261,6 +271,24 @@ ok(recommend(preSpot({ heroSeat: 7, hole: ["Ah", "Kd"], stackBB: 100, aggressor:
   ok(grade(r, { type: "call" }).verdict !== "mistake", "defending T9s in the BB is not graded a mistake");
 }
 ok(recommend(preSpot({ heroSeat: 3, hole: ["8c", "8d"], stackBB: 30 }))!.bucket === "raise", "88 opens from UTG at 30bb (unraised)");
+
+// --- TIER 2: short-stack call-off uses Nash ranges (was chen>=11) ---
+// call_off/15/UTG = "66+, ATs+, AQo+, KQs"
+ok(recommend(preSpot({ heroSeat: 2, hole: ["7c", "7d"], stackBB: 15, aggressor: 3, jam: true }))!.bucket === "call", "77 calls a UTG jam at 15bb");
+ok(recommend(preSpot({ heroSeat: 2, hole: ["5c", "5d"], stackBB: 15, aggressor: 3, jam: true }))!.bucket === "fold", "55 folds to a UTG jam at 15bb");
+ok(recommend(preSpot({ heroSeat: 2, hole: ["Ah", "Jd"], stackBB: 15, aggressor: 3, jam: true }))!.bucket === "fold", "AJo folds to a UTG jam at 15bb (AQo+ only)");
+
+// --- TIER 2: resteal (3-bet jam) over a live open ---
+const rs = recommend(preSpot({ heroSeat: 2, hole: ["Ac", "5c"], stackBB: 12, aggressor: 0, raiseTo: 300 }))!;
+ok(rs.bucket === "raise" && rs.allIn === true, "A5s 3-bet jams (resteal) over a BTN open at 12bb");
+ok(recommend(preSpot({ heroSeat: 2, hole: ["7d", "2c"], stackBB: 12, aggressor: 0, raiseTo: 300 }))!.bucket === "fold", "72o folds to a BTN open at 12bb");
+
+// --- TIER 2: icmEquity actually drives the call-off — a final-table survival premium tightens it ---
+const a6 = { heroSeat: 2, hole: ["Ac", "6c"] as [string, string], stackBB: 12, aggressor: 7, jam: true };
+ok(recommend(preSpot(a6))!.bucket === "call", "A6s calls a CO jam at 12bb deep in the field (chipEV)");
+const a6ft = recommend(preSpot({ ...a6, finalTable: true }))!;
+ok(a6ft.bucket === "fold", "A6s is folded to the same CO jam at the final table (ICM-tightened)");
+ok(!!a6ft.icmNote && a6ft.icmNote.includes("survival premium"), "final-table call-off carries a real ICM survival-premium note");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

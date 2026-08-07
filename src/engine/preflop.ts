@@ -2,6 +2,7 @@
 // decision: RFI by position, response vs a single open, and BB defense — across
 // 100 / 40 / 20bb depth bands. Replaces the Chen heuristic in the deep branch.
 import chartsRaw from "../content/preflop_charts.json";
+import callRaw from "../content/call_charts.json";
 import type { HandState } from "./hand";
 import { inRange } from "./rangeNotation";
 
@@ -14,6 +15,15 @@ const charts = chartsRaw as {
   vs_open: Record<Depth, Record<string, Response>>;
   bb_defense: Record<Depth, Record<string, Response>>;
 };
+const callCharts = callRaw as {
+  call_off: Record<string, Record<string, string>>; // [stack][jammerPos] → calling range
+  resteal: Record<string, Record<string, string>>; // [stack][early|late] → 3bet-jam range
+};
+
+// The five chart positions; the blinds' own jams/opens fold BB into SB.
+function chartPos(p: Pos): "UTG" | "MP" | "CO" | "BTN" | "SB" {
+  return p === "BB" ? "SB" : p;
+}
 
 function band(stackBB: number): Depth {
   if (stackBB >= 70) return "100";
@@ -66,4 +76,27 @@ export function vsOpenCovered(heroPos: Pos, openerPos: Pos): boolean {
   if (heroPos === "BB") return true; // bb_defense covers every opener
   const ip = heroPos === "CO" || heroPos === "BTN";
   return ip && (openerPos === "UTG" || openerPos === "MP" || openerPos === "CO");
+}
+
+const CALL_STACKS = [6, 8, 10, 12, 15];
+const RESTEAL_STACKS = [8, 10, 12, 15];
+function nearestIdx(list: number[], bb: number): number {
+  const c = Math.max(list[0], Math.min(list[list.length - 1], bb));
+  let best = 0;
+  for (let i = 1; i < list.length; i++) if (Math.abs(list[i] - c) < Math.abs(list[best] - c)) best = i;
+  return best;
+}
+
+// Should the hero CALL an all-in jam? `tighten` shifts to a deeper (narrower) chart for ICM pressure.
+export function callOffAction(key: string, jammer: Pos, stackBB: number, tighten = 0): "call" | "fold" {
+  const i = Math.min(CALL_STACKS.length - 1, nearestIdx(CALL_STACKS, stackBB) + tighten);
+  const r = callCharts.call_off[String(CALL_STACKS[i])]?.[chartPos(jammer)];
+  return r && inRange(key, r) ? "call" : "fold";
+}
+
+// Should the hero 3-bet-JAM (resteal) over a single non-all-in open?
+export function restealAction(key: string, opener: Pos, stackBB: number): "raise" | "fold" {
+  const bucket = opener === "UTG" || opener === "MP" ? "early" : "late";
+  const r = callCharts.resteal[String(RESTEAL_STACKS[nearestIdx(RESTEAL_STACKS, stackBB)])]?.[bucket];
+  return r && inRange(key, r) ? "raise" : "fold";
 }
