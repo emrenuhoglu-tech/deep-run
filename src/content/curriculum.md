@@ -110,7 +110,7 @@
 
 ### Middle Stage
 - Antes on, average depth sliding through 30–60bb. This is the **theft economy**: with 2.5bb dead per hand, opening and 3-bet jamming become the main profit engines.
-- Concrete resteal: CO opens 2.2bb; you jam 20bb from the SB. Uncontested you collect 4.7bb (2.2 + 2.5 dead) — a **23% stack increase without a showdown**. Add the times you're called and win, and hands far below premium become profitable jams.
+- Concrete resteal: CO opens 2.2bb; you jam 20bb from the SB. Uncontested you collect 4.2bb (the 2.2 open + 1 BB + 1 big-blind ante — your own posted SB isn't a gain) — a **21% stack increase without a showdown**. Add the times you're called and win, and hands far below premium become profitable jams.
 
 ### The Bubble
 - Hand-for-hand play near the cash line maximizes ICM distortion. **Medium stacks** suffer most: they have real money to lose by busting and can be attacked relentlessly by the chip leader, who risks little.
@@ -388,7 +388,7 @@ Approximate Nash first-in jam ranges at 10bb, 9-handed:
 | BTN | ~25% | ~33% | ~+30% |
 | SB | ~44% | ~50% | ~+15% |
 
-- Typical effect across positions and depths: ante structures widen correct jam ranges by roughly **25–40%** (early positions widen the most in relative terms).
+- Typical effect across positions and depths: ante structures widen correct jam ranges by roughly **25–45%** (early positions widen the most in relative terms — see UTG at +45% above).
 - Concretely: A9o is a fold UTG at 10bb without antes and a clear jam with them; K9o appears in the ante-era BTN jam range a full 2–3bb deeper than in the no-ante range.
 
 ### Big blind ante vs traditional antes
@@ -402,7 +402,7 @@ Approximate Nash first-in jam ranges at 10bb, 9-handed:
 - Practical rule: when the ante kicks in at a new level, mentally shift every chart one notch wider. Players who keep using no-ante ranges in ante levels are the most common source of free fold equity in live MTTs.
 
 @check Adding a 1bb big blind ante changes preflop dead money from 1.5bb to 2.5bb — an increase of roughly | 67% | 25% | 150%
-@check Compared with no-ante structures, antes typically make correct Nash jam ranges | 25–40% wider | 2–3% wider at most | tighter, because calls are cheaper |
+@check Compared with no-ante structures, antes typically make correct Nash jam ranges | 25–45% wider | 2–3% wider at most | tighter, because calls are cheaper |
 @check A big blind ante versus traditional individual antes of the same total per hand should change your jam ranges how? | Essentially not at all — total dead money is what matters | Dramatically tighter with a BB ante | Antes only matter postflop
 
 ## Chapter 6 — Beyond the Jam: Limps, Min-Raises, and Exploits
@@ -583,7 +583,7 @@ Approximate chip-EV open-jam ranges at ~10bb, 8-max final table:
 
 | Position | Approx. jam range | ~% of hands |
 |---|---|---|
-| UTG | 66+, A9s+, AJo+, KQs | ~10% |
+| UTG | 66+, A9s+, AJo+, KTs+ | ~11% |
 | HJ | 44+, A5s+, ATo+, KJs+, KQo | ~14% |
 | CO | 22+, A2s+, A8o+, KTs+, KJo+, QJs | ~20% |
 | BTN | 22+, A2s+, A4o+, K7s+, KTo+, Q9s+, QTo, JTs | ~30% |
@@ -858,8 +858,8 @@ In these windows your effective bubble factor spikes: folding 77, ATs, even TT t
 ### A different game entirely
 In a satellite, 1st place and last-seat place pay identically. Once payouts are flat, chips have value only insofar as they change your **probability of winning a seat** — and past a certain stack, that probability is 1 and every additional chip is worth exactly nothing.
 
-- **Mathematical lock:** with total chips T and S seats, any stack **greater than T ÷ S** guarantees a seat — it is impossible for S players to all finish above you. Example: 10 seats, 1,000,000 chips in play → more than 100,000 locks it.
-- **Practical near-lock:** you rarely need the strict lock. If shorter stacks will blind out before the blinds threaten you, 60–70% of T/S often carries a 95%+ seat probability. Count orbits, not just chips.
+- **Mathematical lock:** with total chips T and S seats, any stack **greater than T ÷ (S+1)** guarantees a seat — it is impossible for S players to all finish above you. Example: 10 seats, 1,000,000 chips in play → more than 90,909 (1,000,000 ÷ 11) locks it.
+- **Practical near-lock:** you rarely need the strict lock. If shorter stacks will blind out before the blinds threaten you, 60–70% of that lock threshold often carries a 95%+ seat probability. Count orbits, not just chips.
 
 ### The fold-aces proof
 11 players, 10 seats, all stacks roughly equal. An opponent open-jams; you look down at AA (~85% vs even a random hand).
