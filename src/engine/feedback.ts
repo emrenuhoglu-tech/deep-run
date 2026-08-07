@@ -58,7 +58,11 @@ export function recommend(t: TournamentState): Rec | null {
   const chen = chenScore(s.hole);
   const key = handKey(s.hole);
   const facingBet = la.call > 0;
-  const facingRaise = h.currentBet > bb; // someone raised beyond the big blind
+  // A voluntary preflop raise — NOT just blinds/antes. startHand posts blinds & antes via
+  // post() (never applyAction), so lastAggressor stays -1 until a real raise. Using
+  // `currentBet > bb` here misread every ante-level pot as raised, disabling the open &
+  // Nash-jam branches for most of the tournament.
+  const facingRaise = h.street === "preflop" && h.lastAggressor !== -1;
   const icm = icmContext(t);
   const icmNote = !icm.pressure
     ? undefined
@@ -94,15 +98,37 @@ export function recommend(t: TournamentState): Rec | null {
   // Postflop
   const regime = "Postflop";
   const cat = categoryOf(score7([...s.hole, ...h.board]));
+  const boardCat = categoryOf(score7(h.board)); // strength of the board by itself
+  const heroBeatsBoard = cat > boardCat; // hole cards actually improve on the board
   const pot = potSize(h);
+  const topBoard = Math.max(...h.board.map((c) => c.r));
+  const holeR = s.hole.map((c) => c.r);
+  const strongPair =
+    (holeR[0] === holeR[1] && holeR[0] > topBoard) || // overpair
+    holeR.includes(topBoard); // top pair (paired the highest board card)
+
   if (!facingBet) {
-    return cat >= 1
+    return heroBeatsBoard && cat >= 1
       ? { bucket: "raise", regime, reason: `You have ${CAT_WORDS[cat]} — bet for value/protection.`, icmNote }
-      : { bucket: "check", regime, reason: `Not much yet — check and see a card.`, icmNote };
+      : { bucket: "check", regime, reason: `Not much beyond the board yet — check.`, icmNote };
   }
-  if (cat >= 3) return { bucket: "raise", regime, reason: `${CAT_WORDS[cat]} is strong — raise for value.`, icmNote };
-  if (cat >= 1 && la.call <= pot * 0.4) return { bucket: "call", regime, reason: `${CAT_WORDS[cat]} at a fair price — call.`, icmNote };
-  return { bucket: "fold", regime, reason: `Weak holding facing a bet — fold.`, icmNote };
+  // Facing a bet. Two pair or better never folds to a single bet.
+  if (heroBeatsBoard && cat >= 3)
+    return { bucket: "raise", regime, reason: `${CAT_WORDS[cat]} is strong — raise for value.`, icmNote };
+  if (heroBeatsBoard && cat === 2)
+    return { bucket: "call", regime, reason: `Two pair is strong enough to continue — call.`, icmNote };
+  if (heroBeatsBoard && cat === 1) {
+    const ceiling = strongPair ? pot : pot * 0.4; // top pair / overpair call bigger bets than weak pairs
+    return la.call <= ceiling
+      ? {
+          bucket: "call",
+          regime,
+          reason: `${strongPair ? "Top pair / overpair" : "A pair"} at a fair price — call.`,
+          icmNote,
+        }
+      : { bucket: "fold", regime, reason: `Only a marginal pair facing a big bet — fold.`, icmNote };
+  }
+  return { bucket: "fold", regime, reason: `Your hand doesn't beat the board — fold.`, icmNote };
 }
 
 export type Grade = { verdict: "good" | "ok" | "mistake"; regime: string; note: string };
@@ -113,10 +139,21 @@ export function grade(rec: Rec, action: Action): Grade {
   const hero = action.type === "raise" ? "raise" : action.type;
   const base = rec.reason + (rec.icmNote ? " " + rec.icmNote : "");
   if (hero === rec.bucket) return { verdict: "good", regime: rec.regime, note: "Textbook. " + base };
+
+  // Too passive — passing up the aggression the spot calls for.
   if (rec.bucket === "raise" && hero === "fold")
     return { verdict: "mistake", regime: rec.regime, note: "Too tight — this is a spot to get chips in. " + base };
+  if (rec.bucket === "raise" && hero === "check")
+    return { verdict: "mistake", regime: rec.regime, note: "You left value on the table — this should be a bet. " + base };
+
+  // Too tight — folding a hand you should keep (over-folding is a real leak, not a free pass).
+  if ((rec.bucket === "call" || rec.bucket === "check") && hero === "fold")
+    return { verdict: "mistake", regime: rec.regime, note: "Too tight — you're giving up a hand you should keep. " + base };
+
+  // Too loose — continuing where you should fold.
   if (rec.bucket === "fold" && RANK[hero] >= 2)
     return { verdict: "mistake", regime: rec.regime, note: "Too loose — better to give this up. " + base };
+
   if (Math.abs(RANK[rec.bucket] - RANK[hero]) === 1)
     return { verdict: "ok", regime: rec.regime, note: "Defensible, but the standard line differs. " + base };
   return { verdict: "ok", regime: rec.regime, note: base };

@@ -28,6 +28,10 @@ function pad5(a: number[]): number[] {
 function uniqueDesc(a: number[]): number[] {
   return Array.from(new Set(a)).sort((x, y) => y - x);
 }
+// Highest kicker, or 0 when none remain (e.g. scoring a bare paired board with no side card).
+function topKicker(rs: number[]): number {
+  return rs.length ? Math.max(...rs) : 0;
+}
 
 // Highest card of the best 5-in-a-row within a rank set (0 if none). Handles the wheel.
 function bestStraight(rankSet: number[]): number {
@@ -73,7 +77,7 @@ export function score7(cards: Card[]): number {
   // Four of a kind
   if (quads.length) {
     const q = quads[0];
-    const kicker = Math.max(...ranks.filter((r) => r !== q));
+    const kicker = topKicker(ranks.filter((r) => r !== q));
     return enc(7, [q, kicker, 0, 0, 0]);
   }
 
@@ -108,7 +112,7 @@ export function score7(cards: Card[]): number {
   // Two pair
   if (pairs.length >= 2) {
     const [p1, p2] = pairs;
-    const kicker = Math.max(...ranks.filter((r) => r !== p1 && r !== p2));
+    const kicker = topKicker(ranks.filter((r) => r !== p1 && r !== p2));
     return enc(2, [p1, p2, kicker, 0, 0]);
   }
 

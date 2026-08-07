@@ -2,9 +2,11 @@
 import { parseCard } from "./cards";
 import { score7, categoryOf } from "./handEval";
 import { icmEquity, icmPressure } from "./icm";
-import type { Seat, Action } from "./hand";
+import type { Seat, Action, HandState } from "./hand";
 import { startHand, legalActions, applyAction, computePots } from "./hand";
 import { inShoveRange } from "./pushfold";
+import { recommend, grade } from "./feedback";
+import type { TournamentState } from "./tournament";
 
 let pass = 0;
 let fail = 0;
@@ -118,6 +120,79 @@ ok(inShoveRange("ATo", 10, "UTG").inRange, "10bb UTG jams ATo");
 ok(!inShoveRange("A5o", 10, "UTG").inRange, "10bb UTG folds A5o (ATo+ only)");
 ok(inShoveRange("54s", 8, "SB").inRange, "8bb SB jams 54s");
 ok(inShoveRange("AA", 15, "UTG").inRange, "15bb UTG jams AA");
+
+// --- TIER 0 P1: antes/blinds must NOT read as a raise (they post via post(), lastAggressor stays -1) ---
+const anteHand = startHand({ stacks: [1500, 1500, 1500], names: ["A", "B", "C"], heroSeat: 0, button: 0, sb: 50, bb: 100, ante: 12 });
+ok(anteHand.currentBet > anteHand.bb, "ante level: currentBet exceeds bb (the old facingRaise trap)");
+ok(anteHand.lastAggressor === -1, "ante level unraised pot has no aggressor (new facingRaise reads false)");
+
+// --- board-only scoring is robust (two paired board, no side card → no Math.max([]) crash) ---
+ok(categoryOf(h("As", "Ad", "7h", "7c")) === 2, "board-only AA77 scores as two pair (kicker guard)");
+
+// --- feedback engine (TIER 0 P2/P3/P4). Build a postflop decision as a minimal TournamentState. ---
+function fbSpot(o: {
+  hole: [string, string];
+  board: string[];
+  currentBet: number;
+  villCommitted?: number;
+  heroStack?: number;
+  bb?: number;
+}): TournamentState {
+  const bb = o.bb ?? 100;
+  const hero: Seat = {
+    id: 0, name: "You", isHero: true, stack: o.heroStack ?? 5000, hole: o.hole.map(parseCard),
+    folded: false, allIn: false, committed: 0, totalCommitted: 0, hasActed: false,
+  };
+  const vill: Seat = {
+    id: 1, name: "V", isHero: false, stack: 5000, hole: [], folded: false, allIn: false,
+    committed: o.villCommitted ?? o.currentBet, totalCommitted: 0, hasActed: false,
+  };
+  const hand: HandState = {
+    seats: [hero, vill], button: 1, board: o.board.map(parseCard), deck: [], street: "flop",
+    toAct: 0, currentBet: o.currentBet, minRaise: bb, lastAggressor: 1, bb,
+  };
+  return { hand, heroSeat: 0, fieldRemaining: 100, paidPlaces: 15, tableSize: 8 } as unknown as TournamentState;
+}
+
+// P2/F4: overpair does not fold to a pot-sized bet, and the call is not graded a mistake.
+const aaSpot = fbSpot({ hole: ["Ah", "Ad"], board: ["9c", "7d", "2s"], currentBet: 300 });
+const aaRec = recommend(aaSpot)!;
+ok(aaRec.bucket !== "fold", "AA overpair on 9-7-2 does not fold to a pot-sized bet");
+ok(grade(aaRec, { type: "call" }).verdict !== "mistake", "calling with the AA overpair is not a mistake");
+// P4/F7: over-folding a call spot IS a mistake.
+ok(grade(aaRec, { type: "fold" }).verdict === "mistake", "over-folding the overpair is flagged a mistake");
+
+// P3/F6: a board pair the hero doesn't share is not hero value.
+const airRec = recommend(fbSpot({ hole: ["3c", "2d"], board: ["As", "Ad", "7h"], currentBet: 0 }))!;
+ok(airRec.bucket === "check", "32o on AA7 checks — the board pair is not the hero's value");
+
+// P4/F7: checking back a mandatory value bet IS a mistake.
+const tripsRec = recommend(fbSpot({ hole: ["As", "Ah"], board: ["Ad", "7h", "2c"], currentBet: 0 }))!;
+ok(tripsRec.bucket === "raise", "trips on A-7-2 wants to bet");
+ok(grade(tripsRec, { type: "check" }).verdict === "mistake", "checking back a value bet is flagged a mistake");
+
+// P1 behavioral: at an ante level with NO voluntary raise, a <=15bb hero reaches the Nash open-jam
+// branch again (before the fix, currentBet=bb+ante misread this as facing a raise and it was dead).
+function fbPre(hole: [string, string], heroStack: number): TournamentState {
+  const bb = 100;
+  const ante = 12;
+  const seat = (id: number, isHero: boolean, stack: number, committed: number): Seat => ({
+    id, name: isHero ? "You" : "P" + id, isHero, stack, hole: [parseCard("2c"), parseCard("3c")],
+    folded: false, allIn: false, committed, totalCommitted: 0, hasActed: false,
+  });
+  const hero = seat(0, true, heroStack, bb + ante);
+  hero.hole = hole.map(parseCard);
+  const hand: HandState = {
+    seats: [hero, seat(1, false, 5000, ante), seat(2, false, 5000, bb / 2 + ante)],
+    button: 1, board: [], deck: [], street: "preflop", toAct: 0,
+    currentBet: bb + ante, minRaise: bb, lastAggressor: -1, bb,
+  };
+  return { hand, heroSeat: 0, fieldRemaining: 100, paidPlaces: 15, tableSize: 8 } as unknown as TournamentState;
+}
+const jamRec = recommend(fbPre(["Ad", "Kd"], 850))!;
+ok(jamRec.regime === "Short-stack push/fold", "ante-level unraised <=15bb reaches the push/fold branch (P1)");
+ok(jamRec.bucket === "raise" && jamRec.allIn === true, "AKs at ~9bb open-jams — the Nash trainer is alive again");
+ok(recommend(fbPre(["7d", "2c"], 850))!.bucket === "fold", "72o at ~9bb folds (outside any jam range)");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
