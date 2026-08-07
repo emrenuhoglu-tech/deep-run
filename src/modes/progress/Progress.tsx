@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { getStats, resetProgress } from "../../lib/progress";
 import { getLeaks, resetLeaks } from "../../lib/leaks";
+import { getHistory, clearHistory } from "../../lib/history";
 import { CHAPTERS } from "../../content/curriculum";
 
 export function Progress({ notify }: { notify: () => void }) {
   const [confirm, setConfirm] = useState(false);
+  const [openRow, setOpenRow] = useState<number | null>(null);
   const s = getStats();
   const total = CHAPTERS.length;
   const pct = Math.round((s.xpInLevel / s.levelSize) * 100);
   const leaks = getLeaks();
+  const history = getHistory();
 
   return (
     <section>
@@ -73,6 +76,36 @@ export function Progress({ notify }: { notify: () => void }) {
         )}
       </div>
 
+      {/* recent decisions — autopsy of drills + simulator mistakes */}
+      {history.length > 0 && (
+        <div className="card p-4 mb-3">
+          <h2 className="eyebrow mb-3">Recent decisions · tap to review</h2>
+          <div className="space-y-1.5">
+            {history.slice(0, 8).map((e, i) => {
+              const dot = e.verdict === "good" ? "bg-good" : e.verdict === "mistake" ? "bg-bad" : "bg-gold";
+              const open = openRow === i;
+              return (
+                <div key={i} className="rounded-lg border border-line bg-surface2/50">
+                  <button
+                    onClick={() => setOpenRow(open ? null : i)}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 text-left focusable"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
+                    <span className="font-mono text-xs text-ink w-10">{e.hand}</span>
+                    <span className="text-xs text-muted truncate flex-1">
+                      you {e.action}{e.action !== e.correct ? ` · line: ${e.correct}` : ""}
+                    </span>
+                    {e.equity != null && <span className="font-mono text-[11px] text-teal">{Math.round(e.equity * 100)}%</span>}
+                    <span className="chip bg-surface border border-line text-[10px] text-muted">{e.concept.split(" ")[0]}</span>
+                  </button>
+                  {open && <div className="px-2.5 pb-2.5 text-xs text-muted">{e.label} — {e.note}</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="card p-4">
         <div className="text-sm text-muted mb-3">
           Play the <span className="text-teal font-semibold">Simulator</span> to apply what you learn — every
@@ -85,6 +118,7 @@ export function Progress({ notify }: { notify: () => void }) {
               onClick={() => {
                 resetProgress();
                 resetLeaks();
+                clearHistory();
                 setConfirm(false);
                 notify();
               }}

@@ -11,6 +11,7 @@ import { handsIn } from "./rangeNotation";
 import { positionOf } from "./preflop";
 import preflopCharts from "../content/preflop_charts.json";
 import { makeSpot, CONCEPTS } from "../modes/drill/spots";
+import { equity } from "./equity";
 
 let pass = 0;
 let fail = 0;
@@ -301,6 +302,11 @@ for (const c of CONCEPTS) {
   }
   ok(gradeable === 25, `makeSpot("${c}") yields a gradeable spot every time (got ${gradeable}/25)`);
 }
+
+// --- TIER 5: Monte-Carlo equity is directionally sane ---
+ok(equity([parseCard("As"), parseCard("Ad")], [], null, 1200) > 0.8, "AA has >80% equity vs a random hand");
+ok(equity([parseCard("Ah"), parseCard("Kh")], [], null, 1200) > 0.58, "AKs has >58% equity vs a random hand");
+ok(equity([parseCard("7d"), parseCard("2c")], [], null, 1200) < 0.4, "72o has <40% equity vs a random hand");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

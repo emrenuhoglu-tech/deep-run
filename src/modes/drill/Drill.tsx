@@ -5,11 +5,13 @@ import { recommend, grade } from "../../engine/feedback";
 import type { Rec, Grade } from "../../engine/feedback";
 import { handKey } from "../../engine/ranges";
 import { openRangeFor } from "../../engine/preflop";
+import { equityForSpot } from "../../engine/equity";
 import { PlayingCard } from "../../components/PlayingCard";
 import { RangeGrid } from "../../components/RangeGrid";
 import { makeSpot, CONCEPTS } from "./spots";
 import type { Concept, Spot } from "./spots";
-import { recordDecision, conceptOf, weakestConcept } from "../../lib/leaks";
+import { recordDecision, weakestConcept } from "../../lib/leaks";
+import { recordHand } from "../../lib/history";
 import { addXp } from "../../lib/progress";
 import { play } from "../../lib/sound";
 
@@ -26,11 +28,13 @@ export function Drill({ notify }: { notify: () => void }) {
   const [focus, setFocus] = useState<Focus>("Mix");
   const [cur, setCur] = useState(() => build("Mix"));
   const [g, setG] = useState<Grade | null>(null);
+  const [eq, setEq] = useState<ReturnType<typeof equityForSpot> | null>(null);
   const [session, setSession] = useState({ good: 0, total: 0 });
   const weak = weakestConcept();
 
   function next(f: Focus = focus) {
     setG(null);
+    setEq(null);
     setCur(build(f));
   }
   function choose(f: Focus) {
@@ -43,10 +47,17 @@ export function Drill({ notify }: { notify: () => void }) {
     const rec = cur.rec;
     if (!rec) return;
     const gg = grade(rec, action);
-    recordDecision(conceptOf(gg.regime), gg.verdict);
+    const e = equityForSpot(cur.spot.t);
+    recordDecision(cur.spot.concept, gg.verdict);
+    recordHand({
+      concept: cur.spot.concept, label: cur.spot.label,
+      hand: handKey(cur.spot.t.hand!.seats[cur.spot.t.heroSeat].hole),
+      action: action.type, correct: rec.bucket, verdict: gg.verdict, note: gg.note, equity: e.pct,
+    });
     if (gg.verdict === "good") addXp(2);
     else if (gg.verdict === "ok") addXp(1);
     play(gg.verdict === "good" ? "good" : gg.verdict === "mistake" ? "mistake" : "tap");
+    setEq(e);
     setG(gg);
     setSession((s) => ({ good: s.good + (gg.verdict === "good" ? 1 : 0), total: s.total + 1 }));
     notify();
@@ -138,6 +149,23 @@ export function Drill({ notify }: { notify: () => void }) {
       ) : (
         <div>
           <FeedbackCard g={g} />
+          {eq && (
+            <div className="card p-3 mb-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted">Equity vs {eq.model}</span>
+                <span className="font-mono font-bold text-teal tabular-nums">{Math.round(eq.pct * 100)}%</span>
+              </div>
+              {eq.ev && (
+                <div className="mt-2 flex items-center gap-4 text-xs font-mono border-t border-line pt-2">
+                  <span className={eq.ev.call >= 0 ? "text-good" : "text-bad"}>
+                    Call EV {eq.ev.call >= 0 ? "+" : ""}{Math.round(eq.ev.call).toLocaleString()}
+                  </span>
+                  <span className="text-muted">Fold EV 0</span>
+                  <span className="ml-auto text-muted">chip-EV: {eq.ev.call >= 0 ? "call" : "fold"}</span>
+                </div>
+              )}
+            </div>
+          )}
           {rangeView && (
             <div className="card p-3 mb-3">
               <RangeGrid range={rangeView.set} mark={handKey(hero.hole)} title={rangeView.label} />

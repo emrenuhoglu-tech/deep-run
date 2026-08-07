@@ -15,6 +15,8 @@ import type { Rec, Grade } from "../../engine/feedback";
 import { PlayingCard } from "../../components/PlayingCard";
 import { play } from "../../lib/sound";
 import { recordDecision, conceptOf } from "../../lib/leaks";
+import { recordHand } from "../../lib/history";
+import { handKey } from "../../engine/ranges";
 
 export default function Simulator() {
   const tRef = useRef<TournamentState | null>(null);
@@ -48,6 +50,12 @@ export default function Simulator() {
       const g = grade(r, a);
       setLastGrade(g);
       recordDecision(conceptOf(g.regime), g.verdict);
+      if (g.verdict !== "good")
+        recordHand({
+          concept: conceptOf(g.regime), label: `${t.blinds.sb}/${t.blinds.bb} · ${t.fieldRemaining} left`,
+          hand: handKey(t.hand!.seats[t.heroSeat].hole), action: a.type, correct: r.bucket,
+          verdict: g.verdict, note: g.note,
+        });
       play(g.verdict === "good" ? "good" : g.verdict === "mistake" ? "mistake" : "tap");
     }
     afterAdvance(t);

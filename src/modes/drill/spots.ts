@@ -5,7 +5,7 @@ import type { HandState, Seat } from "../../engine/hand";
 import { makeDeck, shuffle } from "../../engine/cards";
 import type { Card } from "../../engine/cards";
 
-export const CONCEPTS = ["Preflop (deep)", "Push/fold", "Postflop"] as const;
+export const CONCEPTS = ["Preflop (deep)", "Push/fold", "Postflop", "Final table (ICM)"] as const;
 export type Concept = (typeof CONCEPTS)[number];
 
 const BB = 100;
@@ -123,9 +123,45 @@ function postflop(): Spot {
   return wrap(hand, heroSeat, "Postflop", bet > 0 ? `Flop, ~${potbb}bb pot. Villain bets — call, raise or fold?` : `Flop, ~${potbb}bb pot. Checked to you — bet or check?`);
 }
 
+// A final-table call-off where ICM (real stacks + payout ladder) changes the answer.
+function ftIcm(): Spot {
+  const deck = shuffle(makeDeck());
+  const hole = [deck.pop()!, deck.pop()!];
+  const stackBB = rnd(9, 15);
+  const heroChips = stackBB * BB;
+  const heroSeat = 1;
+  const jammerSeat = 4;
+  // Six players left; hero is short, a bigger stack jams and covers.
+  const ftStacks = [3500, heroChips, 6500, 5000, 2500, 4200, 0, 0];
+  const seats: Seat[] = [];
+  for (let i = 0; i < 8; i++) {
+    const alive = i < 6;
+    seats.push({
+      id: i, name: i === heroSeat ? "You" : "P" + i, isHero: i === heroSeat,
+      stack: alive ? ftStacks[i] : 0,
+      hole: i === heroSeat ? hole : alive ? [deck.pop()!, deck.pop()!] : [],
+      folded: !alive, allIn: false, committed: 0, totalCommitted: 0, hasActed: false,
+    });
+  }
+  seats[jammerSeat].allIn = true;
+  seats[jammerSeat].committed = heroChips; // covers the hero
+  seats[jammerSeat].stack = 0;
+  const hand: HandState = {
+    seats, button: 0, board: [], deck, street: "preflop", toAct: heroSeat,
+    currentBet: heroChips, minRaise: BB, lastAggressor: jammerSeat, bb: BB,
+  };
+  const t = {
+    hand, heroSeat, fieldRemaining: 6, paidPlaces: 15, tableSize: 8,
+    seats: ftStacks.map((stack, i) => ({ name: i === heroSeat ? "You" : "P" + i, stack, isHero: i === heroSeat })),
+    payouts: [5000, 3000, 2000, 1400, 1000, 700, 500, 400],
+  } as unknown as TournamentState;
+  return { t, concept: "Final table (ICM)", label: `Final table, 6 left. You have ${stackBB}bb; a covering stack jams all-in. Call or fold?` };
+}
+
 export function makeSpot(concept?: Concept): Spot {
   const c = concept ?? pick(CONCEPTS);
   if (c === "Push/fold") return pushFold();
   if (c === "Postflop") return postflop();
+  if (c === "Final table (ICM)") return ftIcm();
   return preflopDeep();
 }
