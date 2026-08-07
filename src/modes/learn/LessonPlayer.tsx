@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { chapterById, nextChapter } from "../../content/curriculum";
 import { LessonBody } from "../../components/LessonBody";
 import { completeChapter, addXp, isDone } from "../../lib/progress";
+import { play } from "../../lib/sound";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
@@ -64,12 +65,15 @@ export function LessonPlayer({
     }
     setAwarded(gained);
     notify();
+    play(gained > 0 ? "levelup" : "good");
     setMode("result");
   }
   function pick(i: number) {
     if (picked !== null) return;
     setPicked(i);
-    if (i === quiz[qi].correct) setCorrectCount((c) => c + 1);
+    const right = i === quiz[qi].correct;
+    if (right) setCorrectCount((c) => c + 1);
+    play(right ? "good" : "mistake");
   }
   function nextQuestion() {
     if (qi + 1 < quiz.length) {
@@ -168,7 +172,7 @@ export function LessonPlayer({
     <div className="flex min-h-full flex-col">
       {header}
       <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
-        <div className="text-6xl">{awarded > 0 ? "🎉" : "✓"}</div>
+        <div className="text-6xl anim-pop">{awarded > 0 ? "🎉" : "✓"}</div>
         {quiz.length > 0 && (
           <p className="text-lg font-bold text-ink">
             {correctCount} / {quiz.length} correct

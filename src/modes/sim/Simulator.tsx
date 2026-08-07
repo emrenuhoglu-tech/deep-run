@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createTournament,
   startNextHand,
@@ -13,6 +13,7 @@ import type { Action, HandState } from "../../engine/hand";
 import { recommend, grade } from "../../engine/feedback";
 import type { Rec, Grade } from "../../engine/feedback";
 import { PlayingCard } from "../../components/PlayingCard";
+import { play } from "../../lib/sound";
 
 export default function Simulator() {
   const tRef = useRef<TournamentState | null>(null);
@@ -34,19 +35,26 @@ export default function Simulator() {
     startNextHand(t);
     tRef.current = t;
     setLastGrade(null);
+    play("deal");
     afterAdvance(t);
   }
   function act(a: Action) {
     const t = tRef.current!;
     const r = rec;
+    play(a.type === "fold" ? "fold" : a.type === "check" ? "check" : "chip");
     heroAct(t, a);
-    if (r) setLastGrade(grade(r, a));
+    if (r) {
+      const g = grade(r, a);
+      setLastGrade(g);
+      play(g.verdict === "good" ? "good" : g.verdict === "mistake" ? "mistake" : "tap");
+    }
     afterAdvance(t);
   }
   function deal() {
     const t = tRef.current!;
     nextHand(t);
     setLastGrade(null);
+    if (t.status === "playing") play("deal");
     afterAdvance(t);
   }
 
@@ -88,11 +96,14 @@ export default function Simulator() {
       <div className="grid grid-cols-2 gap-2 mb-3">
         {visible.map(({ s, i }) => {
           const active = h.toAct === i && !showdown;
+          const isWinner = showdown && (h.results?.payouts?.[i] || 0) > 0;
           const shown = h.results?.revealed?.[i];
           return (
             <div
               key={i}
-              className={`card p-2 ${s.folded ? "opacity-40" : ""} ${active ? "ring-2 ring-teal" : ""}`}
+              className={`card p-2 ${s.folded ? "opacity-40" : ""} ${
+                isWinner ? "anim-win" : active ? "ring-2 ring-teal anim-pulse" : ""
+              }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold truncate">{s.name}</span>
@@ -107,7 +118,7 @@ export default function Simulator() {
               {shown && (
                 <div className="flex gap-1 mt-1.5">
                   {shown.map((c, k) => (
-                    <PlayingCard key={k} card={c} small />
+                    <PlayingCard key={`${t.handNo}:${k}`} card={c} small flip delay={k * 60} />
                   ))}
                 </div>
               )}
@@ -117,19 +128,27 @@ export default function Simulator() {
       </div>
 
       {/* board + pot */}
-      <div className="card-raised p-4 mb-3">
-        <div className="text-center eyebrow mb-2">Pot {pot.toLocaleString()} · {asBB(pot)}bb</div>
+      <div className="card-raised felt p-4 mb-3">
+        <div className="text-center eyebrow mb-2 text-teal/80">Pot {pot.toLocaleString()} · {asBB(pot)}bb</div>
         <div className="flex justify-center gap-1.5 min-h-[3.5rem] items-center">
           {h.board.length === 0 ? (
-            <span className="text-muted text-sm">pre-flop</span>
+            <span className="text-emerald-200/50 text-sm">pre-flop</span>
           ) : (
-            h.board.map((c, k) => <PlayingCard key={k} card={c} />)
+            h.board.map((c, k) => <PlayingCard key={`${t.handNo}:${k}`} card={c} flip delay={k * 70} />)
           )}
         </div>
       </div>
 
       {/* hero */}
-      <div className={`card p-3 mb-3 ${h.toAct === t.heroSeat && !showdown ? "ring-2 ring-teal" : ""}`}>
+      <div
+        className={`card p-3 mb-3 ${
+          showdown && (h.results?.payouts?.[t.heroSeat] || 0) > 0
+            ? "anim-win"
+            : h.toAct === t.heroSeat && !showdown
+              ? "ring-2 ring-teal anim-pulse"
+              : ""
+        }`}
+      >
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold">
             You {t.heroSeat === h.button && <span className="chip bg-gold text-base ml-1">D</span>}
@@ -141,7 +160,7 @@ export default function Simulator() {
         </div>
         <div className="flex gap-2">
           {hero.hole.map((c, k) => (
-            <PlayingCard key={k} card={c} hidden={hero.folded} />
+            <PlayingCard key={`${t.handNo}:${k}`} card={c} hidden={hero.folded} deal delay={k * 90} />
           ))}
           {hero.folded && <span className="self-center text-muted text-sm ml-2">folded</span>}
         </div>
@@ -241,7 +260,7 @@ function FeedbackCard({ g }: { g: Grade }) {
         : "border-gold text-gold";
   const label = g.verdict === "good" ? "✓ Good" : g.verdict === "mistake" ? "✗ Mistake" : "~ Close";
   return (
-    <div className={`card p-3 mb-3 border-l-4 ${c}`} style={{ borderLeftColor: "currentColor" }}>
+    <div className={`card p-3 mb-3 border-l-4 anim-pop ${c}`} style={{ borderLeftColor: "currentColor" }}>
       <div className="flex items-center gap-2 text-sm font-bold">
         <span>{label}</span>
         <span className="chip bg-surface2 border border-line text-muted">{g.regime}</span>
@@ -293,9 +312,12 @@ function StartScreen({ onStart }: { onStart: () => void }) {
 
 function FinishScreen({ t, onRestart }: { t: TournamentState; onRestart: () => void }) {
   const won = t.status === "won";
+  useEffect(() => {
+    play(won ? "win" : "bust");
+  }, [won]);
   return (
     <section className="text-center pt-6">
-      <div className="text-5xl mb-3">{won ? "🏆" : "🪦"}</div>
+      <div className="text-5xl mb-3 anim-pop">{won ? "🏆" : "🪦"}</div>
       <h1 className="text-2xl font-bold mb-1">{won ? "You won it!" : `Finished ${t.heroFinish} / ${t.entrants}`}</h1>
       <p className="text-muted mb-1">{t.cash > 0 ? `Cashed $${t.cash.toLocaleString()}` : "No cash this time"}</p>
       <p className="text-xs text-muted mb-6">{t.paidPlaces} places paid · 1st ${t.payouts[0].toLocaleString()}</p>

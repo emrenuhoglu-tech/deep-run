@@ -3,6 +3,7 @@ import Simulator from "./modes/sim/Simulator";
 import { Learn } from "./modes/learn/Learn";
 import { Progress } from "./modes/progress/Progress";
 import { getStats } from "./lib/progress";
+import { soundEnabled, setSoundEnabled, play } from "./lib/sound";
 
 const TABS = [
   { id: "learn", label: "Learn", icon: "📚" },
@@ -41,6 +42,13 @@ export default function App() {
 
 function Header() {
   const s = getStats();
+  const [muted, setMuted] = useState(!soundEnabled());
+  const toggleSound = () => {
+    const next = muted;
+    setSoundEnabled(next);
+    setMuted(!next);
+    if (next) play("tap");
+  };
   return (
     <header className="px-4 pt-5 pb-3 border-b border-line flex items-center justify-between">
       <div>
@@ -49,14 +57,24 @@ function Header() {
         </div>
         <div className="eyebrow mt-0.5">Tournament poker trainer</div>
       </div>
-      <a
-        href="#/progress"
-        className="focusable chip bg-surface2 border border-line font-mono text-xs flex items-center gap-2 px-2.5 py-1.5"
-      >
-        <span className="text-gold">{s.streak}🔥</span>
-        <span className="text-teal">Lv{s.level}</span>
-        <span className="text-muted">{s.xp}xp</span>
-      </a>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggleSound}
+          aria-label={muted ? "Unmute sound" : "Mute sound"}
+          aria-pressed={!muted}
+          className="focusable chip bg-surface2 border border-line grid place-items-center w-8 h-8 text-base"
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
+        <a
+          href="#/progress"
+          className="focusable chip bg-surface2 border border-line font-mono text-xs flex items-center gap-2 px-2.5 py-1.5"
+        >
+          <span className="text-gold">{s.streak}🔥</span>
+          <span className="text-teal">Lv{s.level}</span>
+          <span className="text-muted">{s.xp}xp</span>
+        </a>
+      </div>
     </header>
   );
 }
