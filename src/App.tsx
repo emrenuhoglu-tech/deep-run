@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import Simulator from "./modes/sim/Simulator";
 import { Learn } from "./modes/learn/Learn";
+import { Drill } from "./modes/drill/Drill";
 import { Progress } from "./modes/progress/Progress";
 import { getStats } from "./lib/progress";
 import { soundEnabled, setSoundEnabled, play } from "./lib/sound";
 
 const TABS = [
   { id: "learn", label: "Learn", icon: "📚" },
-  { id: "sim", label: "Simulator", icon: "♠" },
+  { id: "drill", label: "Drill", icon: "🎯" },
+  { id: "sim", label: "Sim", icon: "♠" },
   { id: "progress", label: "Progress", icon: "📈" },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -32,6 +34,7 @@ export default function App() {
       <Header />
       <main className="flex-1 px-4 pb-28 pt-4">
         {tab === "learn" && <Learn notify={notify} />}
+        {tab === "drill" && <Drill notify={notify} />}
         {tab === "sim" && <Simulator />}
         {tab === "progress" && <Progress notify={notify} />}
       </main>
@@ -85,7 +88,7 @@ function TabBar({ tab }: { tab: TabId }) {
       className="fixed bottom-0 inset-x-0 border-t border-line bg-base/95 backdrop-blur"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <div className="max-w-xl mx-auto grid grid-cols-3">
+      <div className="max-w-xl mx-auto grid grid-cols-4">
         {TABS.map((t) => {
           const active = t.id === tab;
           return (

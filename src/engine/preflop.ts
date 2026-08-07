@@ -4,7 +4,8 @@
 import chartsRaw from "../content/preflop_charts.json";
 import callRaw from "../content/call_charts.json";
 import type { HandState } from "./hand";
-import { inRange } from "./rangeNotation";
+import { inRange, handsIn } from "./rangeNotation";
+import { shoveRange } from "./pushfold";
 
 export type Pos = "UTG" | "MP" | "CO" | "BTN" | "SB" | "BB";
 type Depth = "100" | "40" | "20";
@@ -99,4 +100,18 @@ export function restealAction(key: string, opener: Pos, stackBB: number): "raise
   const bucket = opener === "UTG" || opener === "MP" ? "early" : "late";
   const r = callCharts.resteal[String(RESTEAL_STACKS[nearestIdx(RESTEAL_STACKS, stackBB)])]?.[bucket];
   return r && inRange(key, r) ? "raise" : "fold";
+}
+
+// The primary range to visualize for an UNRAISED preflop spot (open / open-jam), else null.
+export function openRangeFor(h: HandState, heroSeat: number, stackBB: number): { label: string; set: Set<string> } | null {
+  if (h.street !== "preflop" || h.lastAggressor !== -1) return null;
+  const pos = chartPos(positionOf(h, heroSeat));
+  if (stackBB <= 15) {
+    const r = shoveRange(stackBB, pos);
+    return r ? { label: `${pos} open-jam · ~${Math.round(stackBB)}bb`, set: handsIn(r) } : null;
+  }
+  const b = band(stackBB);
+  const depth = b === "100" ? "deep" : b === "40" ? "mid" : "short";
+  const r = charts.rfi[b]?.[pos];
+  return r ? { label: `${pos} opening range · ${depth} stack`, set: handsIn(r) } : null;
 }

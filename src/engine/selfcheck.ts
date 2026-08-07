@@ -10,6 +10,7 @@ import type { TournamentState } from "./tournament";
 import { handsIn } from "./rangeNotation";
 import { positionOf } from "./preflop";
 import preflopCharts from "../content/preflop_charts.json";
+import { makeSpot, CONCEPTS } from "../modes/drill/spots";
 
 let pass = 0;
 let fail = 0;
@@ -289,6 +290,17 @@ ok(recommend(preSpot(a6))!.bucket === "call", "A6s calls a CO jam at 12bb deep i
 const a6ft = recommend(preSpot({ ...a6, finalTable: true }))!;
 ok(a6ft.bucket === "fold", "A6s is folded to the same CO jam at the final table (ICM-tightened)");
 ok(!!a6ft.icmNote && a6ft.icmNote.includes("survival premium"), "final-table call-off carries a real ICM survival-premium note");
+
+// --- TIER 3: every generated drill spot is gradeable by the engine (recommend + grade) ---
+for (const c of CONCEPTS) {
+  let gradeable = 0;
+  for (let i = 0; i < 25; i++) {
+    const sp = makeSpot(c);
+    const r = recommend(sp.t);
+    if (r && grade(r, { type: "fold" })) gradeable++;
+  }
+  ok(gradeable === 25, `makeSpot("${c}") yields a gradeable spot every time (got ${gradeable}/25)`);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

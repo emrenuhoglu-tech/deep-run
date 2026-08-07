@@ -22,3 +22,9 @@ export function inShoveRange(
   if (!chart) return { inRange: false, percent: 0 };
   return { inRange: inRange(key, chart.shove_range), percent: chart.approx_percent ?? 0 };
 }
+
+// The raw open-jam range string for a stack/position (for visualization).
+export function shoveRange(stackBB: number, position: string): string {
+  const chart = CHARTS.find((c) => c.position === position && c.stack_bb === nearestStack(stackBB));
+  return chart ? chart.shove_range : "";
+}

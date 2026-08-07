@@ -14,6 +14,7 @@ import { recommend, grade } from "../../engine/feedback";
 import type { Rec, Grade } from "../../engine/feedback";
 import { PlayingCard } from "../../components/PlayingCard";
 import { play } from "../../lib/sound";
+import { recordDecision, conceptOf } from "../../lib/leaks";
 
 export default function Simulator() {
   const tRef = useRef<TournamentState | null>(null);
@@ -46,6 +47,7 @@ export default function Simulator() {
     if (r) {
       const g = grade(r, a);
       setLastGrade(g);
+      recordDecision(conceptOf(g.regime), g.verdict);
       play(g.verdict === "good" ? "good" : g.verdict === "mistake" ? "mistake" : "tap");
     }
     afterAdvance(t);
