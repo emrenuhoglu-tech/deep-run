@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5177",
+    "selfcheck": "tsx src/engine/selfcheck.ts",
+    "prebuild": "tsx src/engine/selfcheck.ts",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

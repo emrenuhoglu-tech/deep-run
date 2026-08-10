@@ -8,9 +8,13 @@ import { inShoveRange } from "./pushfold";
 import { recommend, grade } from "./feedback";
 import type { TournamentState } from "./tournament";
 import { handsIn } from "./rangeNotation";
-import { positionOf } from "./preflop";
+import { positionOf, rfiAction, vsOpenAction, callOffAction, restealAction } from "./preflop";
 import preflopCharts from "../content/preflop_charts.json";
 import { makeSpot, CONCEPTS } from "../modes/drill/spots";
+import {
+  STACKS as RECALL_STACKS, TABLE_SIZES, ALL_KEYS,
+  kindsFor, positionsFor, buildSpot, correctAction,
+} from "../modes/recall/questions";
 import { equity } from "./equity";
 
 let pass = 0;
@@ -308,6 +312,38 @@ ok(recommend(fbSpot({ hole: ["Ah", "Jh"], board: ["Kh", "Qs", "7h"], currentBet:
 ok(recommend(fbSpot({ hole: ["9h", "8s"], board: ["7c", "6d", "2h"], currentBet: 200 }))!.bucket !== "fold", "an open-ended straight draw continues facing a bet");
 ok(recommend(fbSpot({ hole: ["Ah", "Jh"], board: ["Kh", "Qs", "7h"], currentBet: 0 }))!.bucket === "raise", "a strong draw semi-bluffs when checked to");
 ok(recommend(fbSpot({ hole: ["3c", "2d"], board: ["Kh", "Qs", "7h"], currentBet: 300 }))!.bucket === "fold", "air with no draw still folds to a bet");
+
+// --- Range recall: every offered (stack × table × kind × position) combo has a chart,
+// and its answers match the engine graders on all 169 hand keys (fidelity by construction) ---
+{
+  let combos = 0;
+  let missing = 0;
+  let mismatches = 0;
+  ok(ALL_KEYS.length === 169, "recall key universe is the full 169 hand grid");
+  for (const stack of RECALL_STACKS)
+    for (const table of TABLE_SIZES)
+      for (const kind of kindsFor(stack))
+        for (const pos of positionsFor(kind, table)) {
+          const spot = buildSpot(kind, stack, table, pos);
+          if (!spot) { missing++; continue; }
+          combos++;
+          for (const key of ALL_KEYS) {
+            const got = correctAction(spot, key);
+            let want: string;
+            if (kind === "jam") want = inShoveRange(key, stack, pos.chartPos).inRange ? "Jam" : "Fold";
+            else if (kind === "calloff") want = callOffAction(key, pos.chartPos, stack) === "call" ? "Call" : "Fold";
+            else if (kind === "resteal") want = restealAction(key, pos.chartPos, stack) === "raise" ? "Jam" : "Fold";
+            else if (kind === "rfi") want = rfiAction(key, pos.chartPos, stack) === "raise" ? "Raise" : "Fold";
+            else {
+              const a = vsOpenAction(key, pos.chartPos, kind === "bbdef", stack);
+              want = a === "raise" ? "3-bet" : a === "call" ? "Call" : "Fold";
+            }
+            if (got !== want) mismatches++;
+          }
+        }
+  ok(missing === 0, `every offered recall combo resolves to a chart (${missing} missing)`);
+  ok(mismatches === 0, `recall answers match the engine graders across ${combos} combos × 169 hands (${mismatches} mismatches)`);
+}
 
 // --- TIER 5: Monte-Carlo equity is directionally sane ---
 ok(equity([parseCard("As"), parseCard("Ad")], [], null, 1200) > 0.8, "AA has >80% equity vs a random hand");
