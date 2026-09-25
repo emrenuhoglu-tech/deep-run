@@ -1126,3 +1126,283 @@ The average all-in range strengthens with stack depth. Recall Chapter 1: getting
 @check What is the classic pot-control line with KK on an A72 flop after your c-bet is called? | Check back the turn | Overbet the turn | Bet three streets for max value
 @check In soft MTT pools, a big river raise into your 100bb stack is usually? | Heavily value-weighted — fold one-pair hands | Balanced like a solver | Mostly missed draws
 
+# Decision Hygiene
+
+## Chapter 1 — Combo Counting at the River
+
+### The Only Question
+- A big river bet into your bluff-catcher is one question: **if I call this exact spot 100 times, do I profit?**
+- Two inputs decide it: the **price** and the opponent's **bluff share**.
+
+### Input 1 — The Price
+- **Price = call ÷ (pot before the bet + bet + call).**
+- Example: pot 50bb, the opponent jams, you have 77bb behind. Price = 77 ÷ (50 + 77 + 77) = 77 ÷ 204 = 37.7%, call it **38%**. You must win at least 38% of the time.
+- If the bet exceeds your stack, count only what you can actually call. The excess is returned and never touches the price.
+
+### Input 2 — The Bluff Share
+- Picture the opponent's betting range as two bags. **Bag A** holds every hand that beats you (value). **Bag B** holds every hand that does not beat you but still bets (bluffs).
+- **P(bluff) = B ÷ (A + B).** Call when that exceeds the price.
+
+### Why Combos, Not Hands
+- "AA or AK" sounds like a coin flip. It is not: AA is 6 combos, AK is 16, so before removal AK is about 2.7 times more likely.
+- Memorise three numbers: **pair 6, suited 4, offsuit 12**, so any two-rank hand is 16.
+- **Card removal**: one visible card of a rank cuts a pair from 6 to 3; two visible cards cut it to 1. A two-rank hand = remaining × remaining. AQ with one Q on the board and one Q in your hand: 4 aces × 2 queens = 8 combos.
+
+### Worked Example
+- In a 100bb spot you hold KQ on the button in a 3-bet pot against the small blind. Board: 5-3-5-8-Q. The small blind, who covers you, bets half pot on the flop, checks the turn, then jams the river. You have 77bb behind and the pot is 50bb, so the effective bet is 77bb, about 1.5x pot, and your price is 38%.
+
+| Value hand | Combos | Removal |
+|---|---|---|
+| AA | 6 | none |
+| KK | 3 | you hold a K |
+| QQ | 1 | Q on board + your Q |
+| 55 | 1 | two 5s on board |
+| 33 | 3 | one 3 on board |
+| 88 | 3 | one 8 on board |
+| AQ | 8 | 4 aces × 2 queens |
+| A5s | 2 | two 5s left, suited only |
+| **Bag A total** | **27** | |
+
+- **Threshold rule**: bluff ÷ value ≥ bet ÷ (pot + bet). Effective bet 77bb, pot 50bb → 77 ÷ 127 = 0.61. You need at least 0.61 × 27 ≈ **16–17 bluff combos**.
+- If the only bluff is AK: 4 aces × 3 kings = 12 combos. 12 ÷ (27 + 12) = 31%, below 38% → **fold**.
+- Add half of AJ (8 combos): 20 bluffs. 20 ÷ 47 = 43%, above 38% → **call**.
+- So the decision hinges on one question: does this player jam AJ-type hands after checking the turn? Most do not, so it leans **fold**.
+
+> Tip: the ratio form (bluff ÷ value ≥ bet ÷ (pot + bet)) and the probability form (B ÷ (A + B) ≥ price) are the same condition written two ways.
+
+### Table-Side Shortcut
+- With a clock running, anchor to bet size. For every **10 value combos**, the opponent needs roughly:
+
+| Bet size | Threshold (bluff ÷ value) | Bluffs per 10 value combos |
+|---|---|---|
+| Half pot | 1/3 | 3–4 |
+| Pot | 1/2 | 5 |
+| 1.5x pot | 3/5 | 6 |
+| 2x pot | 2/3 | 7 |
+
+- Bigger overbets need more: the threshold keeps climbing toward 10 per 10 as the bet grows.
+- A "jam" is not automatically 1.5x pot. Compare the jam to the pot first: a 30bb shove into a 60bb pot is a half-pot bet and needs far fewer bluffs to be a call.
+- Procedure: (1) price, (2) count bag A, (3) count bag B honestly, (4) compare.
+
+@check Pot is 50bb, the opponent jams for more than your 77bb stack. What winning frequency do you need to call? | About 38%, counting only the 77bb you can call | About 61%, from bet ÷ (pot + bet) | About 50%, because it is a jam
+@check You hold one king and no ace or king is on the board. How many AK combos remain? | 12 | 16 | 9
+@check Facing a 1.5x-pot jam with 27 value combos in bag A, roughly how many bluff combos make the call profitable? | 16–17 | 9 | 27
+
+## Chapter 2 — Bloated Pots: Why One Pair Changes Class
+
+### What a Bloated Pot Is
+- **Definition**: a pot that was 3-bet or 4-bet before the flop. The label is about how the pot was built, not how big it ends up; a single-raised pot that grows large on later streets is still a single-raised pot.
+- **Scale at 100bb**: a 3-bet pot reaches the flop at roughly 4–5x the size of a single-raised pot, a 4-bet pot at about 10x. Every later bet is sized off that base, so a "normal" river bet in a 4-bet pot is your whole stack.
+- **Range shape**: both players arrived with narrow, strong ranges. The suited connectors and small pairs that give up by the river are mostly gone. What remains is value plus a thin slice of bluffs, and regulars rarely fire that slice on the last street.
+
+### Why One Pair Changes Class
+- In a single-raised pot, top pair or an overpair is usually the best hand at showdown and gets paid by worse. It is a value hand.
+- In a bloated pot, the same holding faces a range that started strong and is now betting big on the last street, whatever the earlier line: three barrels, or call-call then a jam over your check. Against a big river bet (roughly 60% pot or more) or a jam, one pair below the top of the opponent's value range (top pair, a middling overpair) no longer beats value; it only beats bluffs. It has become a **bluff-catcher**. Only the top overpair keeps value status, and even that gets counted, not assumed.
+- A bluff-catcher is a counting problem, never a feel problem. Run the Chapter 1 procedure: price the call, then count the bluff combinations the opponent can realistically hold at this size. If the count falls short, fold, regardless of how good the hand looked on the flop.
+
+| Pot type | Typical flop pot at 100bb | What one pair is worth on the river vs a big bet or a jam |
+|---|---|---|
+| Single-raised | ~5–6bb | Often still value; call or bet-fold by texture |
+| 3-bet | ~22–27bb (4–5x) | Bluff-catcher; count, leans fold |
+| 4-bet | ~55bb (~10x) | Bluff-catcher with almost no bluffs; fold by default |
+
+### Where the Rule Stops
+- **River only, big bets only.** Calling flop and turn bets with an overpair against a 4-bet range is often correct: you still beat unpaired broadways and their small bets. The class change happens when the last card lands and the bet is big or a jam.
+- **4-bet pots are the extreme case.** Typical regulars almost never bluff-jam the river there, which pushes correct one-pair river calls close to zero. If you cannot name the bluff combos, there are none.
+- **Do not export the discipline.** In single-raised pots, river calls with strong-but-not-nut hands (second-nut flush, top two pair) remain standard. Ranges are wide, bluffs exist, and folding those hands leaks far more than the occasional cooler costs.
+
+### Three Examples at 100bb
+- **88, you 3-bet from the big blind, A-6-4-7-9.** You bet flop and turn, the opponent calls both. The river 9 completes a flush and adds straights; you check, and the opponent jams 1.3x pot. Count: the range that called twice holds the aces, the sets, the flushes and the straights, and 88 beats only air. Bluff combos willing to jam 1.3x pot over a check on this runout: near zero. **Fold**, and it is correct even when a bluff is shown.
+- **KQ top pair, 3-bet pot, facing a 1.5x-pot effective jam.** By Chapter 1's math you need to win 37.5% of the time. Against a 3-bet range that overbets the river, that is a lot of bluffs to find. **Borderline, leans fold.** The decision comes from the count, not from "but I have top pair".
+- **KJ with a king-high flush, single-raised pot, five-flush board, facing a pot-size bet.** Effectively second nuts: only the ace and a few rare straight-flush combos beat it, and the price is 33%. **Call.** If the ace appears, that is a cooler, not a mistake. This is not a bloated pot and the rule does not apply.
+
+> Tip: label the pot before the flop, "single-raised" or "bloated". The label picks the river procedure before your hand gets a chance to argue.
+
+@check In a 4-bet pot at 100bb you hold an overpair and face a river jam. What is the default action? | Fold, because regulars almost never bluff-jam there | Call, because an overpair beats most 4-bet ranges | Call, because the pot is too big to fold
+@check Which pot type does the bloated-pot river discipline NOT apply to? | Single-raised pots | 3-bet pots | 4-bet pots
+@check In a single-raised pot you hold a king-high flush on a five-flush board and face a pot-size bet. What should you do? | Call; it is the second nuts and losing to the ace is a cooler | Fold; one hand beats you | Fold; treat it like a bloated-pot bluff-catcher
+
+## Chapter 3 — The Flop-Call Plan: Outs, Safe Blanks, Fold Cards
+
+### The Rule: No Flop Call Without a Turn Plan
+- A flop call is not a flop decision. It is a **promise** to pay one more bet on a blank turn. If there are no safe blanks, the call is a pure draw that must be paid for by outs and implied odds alone; if those do not reach the price either, fold now or raise now.
+- Before any chips go in, sort the 47 unseen cards into three piles.
+- **Outs**: cards that improve you to the likely best hand. Only these are compared to the price.
+- **Safe blanks**: cards that change nothing and on which you will call one more bet. They belong to the turn plan, not to the price.
+- **Fold cards**: cards that complete the opponent's range: overcards to your pair, the flush, the straight. On these you fold without regret.
+- Count the outs, compare them to the price, and name the safe blanks before you call. That is the whole procedure.
+
+### Thresholds by Bet Size
+- The price of a call is bet ÷ (pot + bet + call). Your outs have to clear that number as a share of the 47 unseen cards. Implied odds and the chance of a checked turn can close a gap of a few outs at deep stacks; they never turn a two-out hand into a call.
+
+| Flop bet | Price to call | Outs needed (of 47) |
+|---|---|---|
+| Pot-size | 1 ÷ 3 ≈ 33% | about 15+ (15/47 ≈ 32%) |
+| Half pot | 0.5 ÷ 2 = 25% | about 12 (12/47 ≈ 26%) |
+| Quarter pot | 0.25 ÷ 1.5 ≈ 17% | about 8 (8/47 ≈ 17%) |
+
+- The bigger the bet, the more outs you need. A small bet lets you continue on thin piles, but only if the outs are real and the safe blanks are named: a card you "hope" is a blank while the opponent's range still bets it is a fold card.
+
+### Worked Example: KJ Facing a Small Bet
+- 29bb effective. Hijack opens, you defend the big blind with KJ. Flop Q-6-A rainbow; the hijack bets 25% pot.
+- Outs: only the four tens, which give the nut straight. Pairing the J gives third pair, beaten by every ace and queen; pairing the K gives second pair that still loses to every ace and to the AK, KQ and JT the hijack keeps betting on that card. Neither pair is an out.
+- Price: 1 ÷ (4 + 1 + 1) ≈ 17%. Four outs ≈ 9%, plus a little implied money at 29bb and the chance the hijack checks the turn and you see the river for free. **Borderline**: the call is allowed only with the plan already written, a ten continues and every other card folds to a barrel. If you cannot commit to that plan, fold.
+- What happened: the turn was a blank, the hijack bet 2/3 pot, and KJ-high folded. With the plan written first that is one small bet paid and the second refused. Without it, the same turn becomes a guess, and guesses are where call-call-fold lines start.
+
+### Worked Example: 88 in a 3-Bet Pot
+- Pocket 88 in a 3-bet pot, flop T-5-A. The opponent bets small and you call. The turn brings a barrel and you fold, which is correct.
+- The real mistake was on the flop. 88 is a bluff-catcher, not a draw, so outs are the wrong yardstick; the call had to be paid for by safe blanks, and there were none. Every ace, king, queen, jack and ten is a fold card, and a 3-bet range on A-T-5 barrels almost every low card too and rarely checks back with worse. The call was a promise you could not keep.
+
+### The Alternative to Calling: Raise
+- **Raise draws with fold equity.** When the outs are few but real, and the opponent's small bet is spread across a wide, mostly medium range, raising turns your equity into two ways to win: they fold now, or you hit later.
+- **Value-raise strong top pair versus stations.** Against opponents who call raises with any pair or draw, slowplaying top pair strong kicker forfeits the biggest street. Raise the flop, bet the turn, and let them pay with worse.
+- If you cannot name your outs and your safe blanks, calling is guessing; raising forces the opponent to define their hand.
+
+> Tip: say the outs and the safe blanks out loud in your head before clicking call. If the list is "a ten... and, uh..." the answer is fold.
+
+### Track Call-Call-Fold
+- **Call-call-fold** is calling one street and folding to the next bet: flop call then turn fold, or flop and turn calls then a river fold. It is the most expensive line a caller can take, bets paid to reach a fold, and it is almost always a flop call made without a turn plan.
+- Tally it per session. Target: **2 or fewer**. Above that, the flop calls are the leak, not the rivers.
+
+@check Facing a half-pot flop bet, roughly how many outs do you need to call? | About 12 of the 47 unseen cards | About 8 of the 47 unseen cards | About 20 of the 47 unseen cards
+@check With KJ on Q-6-A rainbow facing a 25% pot bet, which cards count as outs? | Only the four tens | Any king or jack | Any king, jack or ten
+@check What is the per-session target for call-call-fold lines? | Two or fewer | Five or fewer | Zero, without exception
+
+## Chapter 4 — Strength Signals: When One Pair Becomes a Bluff-Catcher
+
+### What a Strength Signal Is
+- A **strength signal** is an action the population in a soft field rarely takes without a strong hand.
+- The five signals to memorize:
+- **Flop check-raise** — typical frequency around 14% in these pools; the range is two pair or better, sets, and strong draws.
+- **Second barrel on the turn in a 3-bet pot** — the flop c-bet was automatic; the turn bet is not.
+- **River raise** — the least bluffed action in the game.
+- **Pot-size turn bet** — a full-pot sizing is chosen by players who want stacks in, not by players who are guessing.
+- **Turn barrel after a flop check-raise** — the check-raiser continuing for a second street is strength regardless of sizing.
+- After a signal, top pair stops being a value hand. It becomes a **bluff-catcher**: a hand whose only job is to beat the rare bluff and lose the minimum to everything else.
+
+### The One-Pair Rule
+- With one pair after a signal: **do not raise, do not jam. Call or fold.**
+- Before any raise, ask two questions: does a **better hand fold**? Does a **worse hand call**?
+- If both answers are no, the raise is a donation.
+- Calling keeps their bluffs in and keeps the pot proportionate to a hand that is, at best, a bluff-catcher. Folding is right when the price is bad or the signal is the strongest kind.
+
+### Signal Table
+| Signal | Typical population range | Your one-pair action |
+|---|---|---|
+| Flop check-raise (~14% frequency) | Two pair+, sets, strong draws | Call once; never raise |
+| Turn barrel after a flop check-raise | Two pair+, sets, draws that improved | Call at a good price or fold; never raise |
+| Turn second barrel in a 3-bet pot | Overpairs, sets, top pair with a strong kicker or better | Fold underpairs and weak top pair; call only an overpair or top pair strong kicker at a good price; never raise |
+| Pot-size turn bet | Two pair+, sets, nutted draws | Call or fold; never jam |
+| River raise | Nutted hands, almost no bluffs | Fold most one pair; call only at the top of your range |
+
+### Three Hands
+- **(a) The 100bb donation.** AJ opens the cutoff, big blind calls. Flop J-3-6: the c-bet is check-raised — signal one. Calling is right; top pair still beats the draws. Turn is a T and the opponent bets three-quarters pot — signal two. Hero jams 1.65x the pot and is called by J3 two pair. Run the two questions: no better hand folds (sets and two pair are never folding), no worse hand calls (a draw or a weaker jack does not call 1.65x pot). Calling instead saves about **20bb** of expectation and still lets a missed draw bluff the river.
+- **(b) The draw jam at 62bb.** T7 in the big blind, three-way. Flop 8-K-9: small blind bets, Hero calls with the open-ended straight draw. Turn 4, small blind bets **full pot** — signal. Hero jams 2.8x the pot and is called by K9 two pair. A draw raise is a bluff with equity; it needs **fold equity** to work. A pot-size bettor rarely folds, so the jam turns a hand with outs into a hand that must hit. Draws: raise only when there is fold equity; call a jam only when your equity is at least the price offered.
+- **(c) The correct fold.** 88 in a 3-bet pot. Turn J, opponent barrels — signal. Fold. The flop call belongs to Chapter 3's discipline; the turn fold belongs here. One pair below the board facing a second barrel has no bluff-catching job left.
+
+### The Exception: Nutted Hands
+- If your hand beats the bulk of the signal's stated range, the signal concerns the **opponent's** range, not your hand: sets, straights and flushes, and top two pair against a check-raise. On the flop and turn, raise or jam freely: the question that matters — does a worse hand call? — now answers yes, and one yes is enough.
+- Against a river raise, sets call but do not re-raise; re-raise only with the nuts or near-nuts, where the raiser's own value hands are the worse hands that call. Two pair is a bluff-catcher there and folds unless it is top two on a board with no straight or flush possible.
+- A set after a check-raise is a value hand; top pair after a check-raise is a bluff-catcher.
+
+> Tip: name the hand class before acting — "bluff-catcher" or "value" — and the raise button loses its pull.
+
+@check After a flop check-raise in a soft field, what does top pair become? | A bluff-catcher: call or fold, never raise | A value hand that should be raised for protection | A fold in every case
+@check Which two questions must be asked before any raise? | Does a better hand fold, and does a worse hand call? | Is the pot big, and do I have position? | Am I ahead now, and does my kicker play?
+@check What did the open-ended straight draw jam versus a pot-size turn bet lack? | Fold equity: a pot-size bettor rarely folds | Outs to a straight | A big enough stack to apply pressure
+
+## Chapter 5 — C-Bet Sizing Is a Price, Not a Story
+
+### A Small Bet Is Not Asking to Be Believed
+- **Stop narrating.** A one-third-pot c-bet is not a claim about your hand. It is a price: the cheapest fold you can buy. What matters is how often they fold versus how much you paid.
+- **The breakeven formula** for a pure bluff is bet ÷ (pot + bet).
+
+| Bet size (of pot) | Breakeven fold % | One player's database audit (fold rate, sample) |
+|---|---|---|
+| 33% | 25% | 28% for bets of 40% pot or less (87 bets) |
+| 50% | 33% | 34% for 40–60% pot (56 bets), raised 23% of the time |
+| 67% | 40% | 57% for 60–80% pot (21 bets) |
+| 100% | 50% | Not a flop tool in single-raised pots |
+
+- **Read the first row twice.** In that audit small flop bets were folded to only 28% of the time, so they were usually called. The bet still profited because it needed only 25%; being called often is the expected outcome. Pull your own fold rate from your database and compare it to the breakeven: the arithmetic column is fixed, the audit column is yours to measure.
+
+### The Mid-Size Trap
+- In the same audit of about 160 single-raised pots, **40–60% pot bets got the worst of both worlds**: folds only 34% against a 33% breakeven, raises 23%, and a negative net result. Big enough to lose real money when called or raised, small enough that nobody folded a pair.
+- **40% pot or less** finished clearly positive: cheap, folds above breakeven, raises rare.
+- **60–80% pot** drew 57% folds, above the 37–44% breakeven, yet finished slightly negative. The flop price was fine; the hands that called a big bet were strong, and the money was lost on the turn and river. Twenty-one bets is also a small sample, so read it as a warning, not a law.
+- A medium flop bet builds a pot you never decided to build, which is how bloated pots start.
+- **Procedure:** choose small or large, never medium. A 45–55% flop click means you have not decided anything yet. Bucket your own c-bets the same way (40% or less, 40–60%, 60–80%) and read fold rate, raise rate and net result before trusting any of these numbers.
+
+### The Board Picks the Size
+- **Dry and high boards** (K-7-2 rainbow, Q-6-3 rainbow): small and frequent. Your range holds the strong hands; theirs is mostly weak pairs and backdoors that a small bet already taxes.
+- **Wet and connected boards** (9-8-6 two-tone, J-T-7): large and selective. Draws and pairs call small bets with correct odds, so bet big with the hands that want to deny equity and check the rest.
+- **Ace-high dry boards are the special case.** No size folds an ace, and large sizes only fold the weak pairs and gutshots you want to keep paying you. Bet small: you charge the hands that can call and lose nothing against the aces that were never folding.
+
+### Credibility Comes From the Line, Not the Flop Bet
+- **Small flop, large polarised turn.** When the turn improves your range (an overcard, a brick that keeps you ahead), follow the small flop bet with a 60–75% pot turn bet. That is where the story gets told.
+- **Give up on bad turns.** A turn that completes draws or pairs the board for their range is a check. The flop bet cost little; do not throw good chips after it.
+- **One turn size for value and bluffs.** If value bets 70% and bluffs bet 55%, the size is the tell. Pick one number for the whole polarised range.
+
+> Tip: the flop bet buys a price; the turn bet sells a story. Do not pay story prices on the flop.
+
+### Three Spots at 100bb
+- **AJ on the button vs big blind, flop A-5-8 rainbow.** A 67%-pot c-bet folds the same hands a 33% bet would (the air) and pushes out the 5x and 8x that would have called small. Bet small and let the weak pairs pay across two streets.
+- **J8 on Q-2-5 rainbow, pure air.** A 35%-pot c-bet needs 26% folds to break even. Against a pool that folds around 30% to small bets, as in the audit above, that is a profitable click by itself. Bet, take the fold, move on.
+- **KT with a flopped flush on A-7-9, three of the suit.** Small c-bet, called. The turn was checked, arguably too passive with a nutted hand when a large turn bet was available. The river raise still got paid: a small flop bet does not cap what you win later, it keeps the weaker hands in the pot until the big bets arrive.
+
+@check A one-third-pot bluff c-bet breaks even at what fold frequency? | 25% | 33% | 50%
+@check Why did 40–60% pot flop bets underperform in single-raised pots? | Too few folds and too many raises for the price paid | Opponents folded too often, wasting value | They were only used on wet boards
+@check On an ace-high dry board, why bet small rather than large? | No size folds an ace, and big bets fold the weak pairs you want to keep in | Large bets fold aces more often | Small bets disguise the flush draw
+
+## Chapter 6 — Session Protocol: Lobby Rule, Three Numbers, Re-entry Gate
+
+- The previous chapters taught concepts. Concepts do not survive tilt; procedures do. This chapter turns discipline into rules you can count, time, and check off.
+- Everything here is measurable: a timer, three integers, a card, a depth table, one sizing rule.
+
+### The Lobby Rule
+- **In tournaments, the biggest losses come from the lobby, not the table.** A bad river call costs at most one stack. A re-entry cascade costs several, and each bullet feels justified at the moment it is fired.
+- **The rule**: after a bust, no new entry and no new table for 20 minutes. The timer decides, not the feeling.
+- **The re-entry decision is made in a written plan before the session** — number of bullets per event, total bullets for the day — never in the hand after a bust.
+- **What reflex looks like**: a player lost a large pot with AK. Fifty-four seconds after that hand ended, the same player jammed 9-2 suited from the hijack for 19bb and was called by A3. No range, no fold-equity estimate, no plan; a hand was simply fired at the table. That is a reflex, not a decision.
+- **The cascade version**: several bullets fired within half an hour after a bust. Each one looks like "a fresh start"; in sum it is the single most expensive habit in the session.
+
+> Tip: if you cannot say from your plan how many bullets you had left before the bust, the answer is zero.
+
+### Three Numbers After Every Session
+- **Counted from the hand history, not from memory.** Memory keeps the coolers and forgets the leaks. Open the hand history, filter the spots, and write the three counts down.
+
+| Number | Definition | Target |
+|---|---|---|
+| Uncounted river calls, one pair, bloated pot | Calling a big river bet with one pair in a 3-bet or 4-bet pot without first counting bluff versus value combos (Chapter 1) | 0 |
+| Call-call-fold lines | Calling one street and folding to the next bet (flop then turn, or turn then river) | ≤ 2 |
+| Raise/jam into a strength signal | Raising or jamming a medium one-pair hand postflop, a bluff or a semi-bluff after an opponent showed strength (a raise, a big turn bet, a donk bet, a cold 4-bet); count it when better hands call and worse hands fold | 0 |
+
+- These are the leaks that cost the most in soft pools: paying off nutted lines without a count, paying a street to fold on the next, and turning a medium hand or a draw into a jam that only better hands call.
+- A jam of 30bb or more needs at least 30% equity when called. If you cannot say the number, do not jam. Premium pairs, and AK at 70bb or less against a cold 4-bet, are not counted.
+- **Graduation rule**: if all three targets are met for three consecutive sessions, run a fresh hand-history audit and set new targets. The numbers treat the current leaks; they are not permanent.
+
+### Pre-Session Ten Minutes
+- Reread the short rule card: each chapter of this course condensed into one line, for example "chips are not equity", "c-bet size follows texture", "low SPR means commit or fold", "position sets the bluff budget", "multiway: fewer bluffs, no thin value".
+- Write the re-entry plan on the same card. Ten minutes, before the first table.
+
+### Depth Bands
+- A memory aid for tournaments, read once per session so the stack size chooses the toolset before the cards do.
+
+| Depth | Rule |
+|---|---|
+| Below 15bb | Jam or fold |
+| 15–25bb | Min-raise with a rest-plan (decide now what the rest of the stack does if raised); open-jam only when fold equity is certain |
+| 25–40bb | A 3-bet means a jam, so never 3-bet a hand you cannot jam |
+
+- **Before any 3-bet or squeeze, know the answer to "what if they jam?"** No answer, no 3-bet.
+- **A squeeze is 4–5x the open.**
+
+### Value Courage
+- **When an opponent has called two streets and you river the nuts or near-nuts, bet 1/3–2/3 pot.** Callers call; they rarely bet for you.
+- Checking to trap costs more than it gains against callers: the check-raise you hope for almost never arrives, and the river bet you skipped was the most reliable money in the hand.
+
+> Tip: the three numbers measure what you paid off; value courage measures what you left behind. Both live in the same hand history.
+
+@check After a bust, what does the lobby rule require? | No new entry and no new table for 20 minutes | Re-enter at once while the reads are fresh | Move to a softer table within five minutes
+@check What is the session target for uncounted river calls with one pair in a bloated pot? | Zero | At most two per session | At most one per hour
+@check At 25–40bb, what does a 3-bet commit you to? | Jamming if the opener shoves, so only 3-bet hands you can jam | Folding to a jam, since 3-bets are mostly bluffs here | Calling a jam with any pair
